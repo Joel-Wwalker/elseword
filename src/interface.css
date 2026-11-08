@@ -115,6 +115,13 @@ button:disabled { opacity: .45; }
 .large-sample { font-family: var(--sans); font-size: 28px; line-height: 1.4; }
 .token { font-family: var(--sans); }
 .dictionary-toolbar { gap: 10px; }
+.dictionary-filters { margin: 0 0 20px; border-bottom: 1px solid var(--line); }
+.dictionary-filters > summary { cursor: pointer; min-height: 44px; padding: 12px 0; color: var(--ink); font: 500 14px/1.5 var(--sans); }
+.dictionary-filters > summary > span { margin-inline-start: 12px; color: var(--muted); font-weight: 400; overflow-wrap: anywhere; }
+.dictionary-filter-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 16px; padding: 8px 0 20px; }
+.dictionary-filter-fields label { display: grid; gap: 8px; min-width: 0; color: var(--muted); font-size: 14px; }
+.dictionary-filter-fields select { width: 100%; min-width: 0; }
+.dictionary-filter-fields #locked-filter[aria-pressed=true] { background: var(--selected); border-color: var(--accent); color: var(--ink); }
 .search-field { background: var(--surface); border-color: var(--control-border); border-radius: 6px; }
 .search-field input { background: transparent; font-size: 15px; }
 .dictionary-toolbar>select { font-size: 14px; width: 165px; }
@@ -217,6 +224,9 @@ dialog label, dialog small { font-family: var(--sans); font-size: 14px; }
   .sticky-panel { border: 0; padding: 20px 0; }
   .dictionary-toolbar { display: grid; grid-template-columns: 1fr 1fr; }
   .dictionary-toolbar .search-field { grid-column: 1/-1; }
+  .dictionary-toolbar #add-word { grid-column: 1/-1; }
+  .dictionary-filter-fields { grid-template-columns: minmax(0, 1fr); }
+  .dictionary-filters > summary > span { display: block; margin: 4px 0 0 18px; }
   .dictionary-toolbar>select, .dictionary-sort, #word-sort { width: 100%; min-width: 0; }
   .dictionary-table th { font-size: 12px; padding: 12px 7px; }
   .dictionary-table td { font-size: 14px; padding: 9px 7px; }

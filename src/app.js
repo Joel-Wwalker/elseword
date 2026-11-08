@@ -128,6 +128,9 @@ function renderDictionary() {
   $('dictionary-count').textContent=`${all.length?`${page*WORDS_PER_PAGE+1}–${Math.min((page+1)*WORDS_PER_PAGE,all.length)} of ${all.length}`:'0'} words`;
   $('page-label').textContent=`${page+1} / ${pages}`;$('prev-page').disabled=page===0;$('next-page').disabled=page>=pages-1;
   $('locked-filter').setAttribute('aria-pressed',onlyLocked);
+  const filters=[$('category-filter').value,onlyLocked?'Kept words':''].filter(Boolean);
+  const sortName=$('word-sort').selectedOptions[0]?.textContent??'Original order';
+  $('dictionary-filter-summary').textContent=`${filters.join(' · ')||'All words'} · ${sortName}`;
 }
 function setWord(id,value) {
   const next=clone(language());const word=next.words.find(w=>w.id===id);if(!word)return;
@@ -307,7 +310,7 @@ $('project-menu').onclick=projectDialog;
 $('world-language-name').onchange=event=>{const next=clone(language());next.name=event.target.value.trim()||language().name;commit(next);};
 $('undo-button').onclick=()=>{if(!history.length)return;project={...project,...history.pop()};$('undo-button').disabled=!history.length;save();renderAll();notify('Last change undone.');};
 $('word-search').oninput=()=>{page=0;renderDictionary();};$('category-filter').onchange=()=>{page=0;renderDictionary();};$('locked-filter').onclick=()=>{onlyLocked=!onlyLocked;page=0;renderDictionary();};
-const sortLabel=document.createElement('label');sortLabel.className='dictionary-sort';sortLabel.innerHTML='<span class="sr-only">Sort dictionary</span><select id="word-sort" aria-label="Sort dictionary"><option value="original">Original order</option><option value="english">English A–Z</option><option value="word">Your language A–Z</option><option value="category">Category</option></select>';$('category-filter').after(sortLabel);$('word-sort').onchange=()=>{page=0;renderDictionary();};
+$('word-sort').onchange=()=>{page=0;renderDictionary();};
 $('prev-page').onclick=()=>{page--;renderDictionary();};$('next-page').onclick=()=>{page++;renderDictionary();};$('add-word').onclick=()=>editWordDialog();
 $('export-csv').onclick=()=>download(exportCSV(language()),`${filename()}-dictionary.csv`,'text/csv;charset=utf-8');
 $('generate-names').onclick=()=>{namesRoll++;renderNames({sound:true});};$('name-kind').onchange=()=>renderNames({sound:true});
