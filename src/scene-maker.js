@@ -71,14 +71,14 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
 
   host.innerHTML = `<div class="scene-maker">
     <header class="sm-header"><div class="sm-heading"><h1 tabindex="-1" id="sm-title">Scene editor</h1><p id="sm-local-status" role="status"></p></div><div class="sm-actions"><button class="primary-button" id="sm-save-local" title="Save this scene on this device">Save</button><button class="secondary-button" id="sm-video-export" aria-controls="sm-video-panel">Export video</button><button class="text-button" id="sm-undo" disabled>Undo</button><button class="text-button" id="sm-close">Back to world</button></div></header>
-    <p id="sm-error" class="sm-error" role="alert"></p><p id="sm-notice" class="sm-notice" role="status"></p>
+    <p id="sm-error" class="sm-error" role="alert"></p><p id="sm-notice" class="sm-notice" role="status"></p><p id="sm-video-limit" class="sm-notice" role="status"></p>
     <details class="sm-setup"><summary>Scene settings <span id="sm-setup-summary">Name, room, cast and language</span></summary>
       <div class="sm-setup-grid"><label>Scene name<input id="sm-name" maxlength="80"></label><label>Room<select id="sm-room">${SCENES.map(scene => option(scene.id, scene.name)).join('')}</select></label><label>First character<select id="sm-cast-0">${CHARACTERS.map(person => option(person.id, person.name)).join('')}</select></label><label>Second character<select id="sm-cast-1">${CHARACTERS.map(person => option(person.id, person.name)).join('')}</select></label><label>Prop<select id="sm-prop">${SCENE_PROPS.map(prop => option(prop, prop[0].toUpperCase() + prop.slice(1))).join('')}</select></label><label>Captions<select id="sm-captions"><option value="both">Both languages</option><option value="language">Your language</option><option value="english">English</option></select></label><label class="sm-checkbox"><input id="sm-sound" type="checkbox"> Dialogue sounds</label><div class="sm-language"><p id="sm-language-name"></p><button class="text-button" id="sm-use-language">Update from studio language</button><small>The scene keeps a copy of its language. Update it to use your latest words and grammar.</small></div></div>
       <div class="sm-remix"><label>Start from a conversation<select id="sm-template"></select></label><label id="sm-choice-label" hidden>Reply<select id="sm-choice"></select></label><button class="secondary-button" id="sm-remix">Use conversation</button><button class="text-button" id="sm-blank">Start blank</button><span class="sm-help">Undo restores the previous scene.</span></div>
     </details>
     <div class="sm-workspace">
       <section class="sm-preview" aria-label="Scene preview"><div class="scene-window-bar"><span>Scene preview</span><button id="sm-toggle-preview" class="quiet-button" type="button" aria-expanded="true" aria-controls="sm-preview-content">Hide scene</button></div><div id="sm-preview-content"><canvas id="sm-canvas" width="960" height="720" aria-label="Animated scene preview" aria-describedby="sm-caption sm-preview-help"></canvas><div class="sm-playback"><button class="primary-button" id="sm-play" aria-label="Play scene">Play</button><button class="secondary-button" id="sm-restart">Restart</button><label class="sr-only" for="sm-seek">Scene playback position</label><input id="sm-seek" type="range" min="0" max="1" value="0" step="50"><output id="sm-time">0:00 / 0:00</output></div><div id="sm-caption" class="sr-only" aria-live="off"></div><p id="sm-preview-help" class="sr-only">Focus the preview and press Space to play or pause. Use the left and right arrow keys to move through the scene.</p></div>
-        <details class="sm-video" id="sm-video-panel"><summary>Video export <span>Up to 60 seconds</span></summary><div class="sm-video-content"><p id="sm-video-status" role="status"></p><progress id="sm-video-progress" max="1" value="0" hidden></progress><button class="text-button" id="sm-cancel-export" hidden>Cancel recording</button><div id="sm-video-result" hidden><video id="sm-video-player" controls playsinline preload="metadata"></video><a id="sm-video-download" class="secondary-button" download>Download video</a></div><p class="sm-help">Choose Export video above. Recording takes as long as the scene; keep this tab visible.</p></div></details>
+        <details class="sm-video" id="sm-video-panel" hidden><summary>Video export <span>Up to 60 seconds</span></summary><div class="sm-video-content"><p id="sm-video-status" role="status" tabindex="-1"></p><progress id="sm-video-progress" max="1" value="0" hidden></progress><button class="text-button" id="sm-cancel-export" hidden>Cancel recording</button><div id="sm-video-result" hidden><video id="sm-video-player" controls playsinline preload="metadata"></video><a id="sm-video-download" class="secondary-button" download>Download video</a></div><p class="sm-help">Recording takes as long as the scene; keep this tab visible.</p></div></details>
       </section>
       <section class="sm-storyboard" aria-labelledby="sm-storyboard-title"><div class="sm-section-heading"><h2 id="sm-storyboard-title">Storyboard</h2><span id="sm-beat-count"></span></div><ol id="sm-beats" class="sm-beats"></ol><div class="sm-actions"><button class="secondary-button" id="sm-add-beat">Add line</button><button class="text-button" id="sm-add-pause">Add a pause</button></div><section id="sm-beat-editor" class="sm-beat-editor" aria-label="Selected line editor"></section></section>
     </div>
@@ -197,8 +197,10 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
     $('language-name').textContent = `Scene language: ${project.language.name}`;
     $('undo').disabled = !history.length || Boolean(recording); $('add-beat').disabled = $('add-pause').disabled = project.beats.length >= 24 || Boolean(recording);
     $('beat-count').textContent = `${project.beats.length} / 24 lines · ${timeLabel(compiled.duration)}`;
-    $('video-export').disabled = Boolean(recording) || compiled.duration > 60000;
-    if (!recording && !videoURL) $('video-status').textContent = compiled.duration > 60000 ? 'This scene is over 60 seconds. Shorten dialogue or pauses to export it.' : 'Ready to export.';
+    const overVideoLimit = compiled.duration > 60000;
+    $('video-export').disabled = Boolean(recording) || overVideoLimit;
+    $('video-limit').textContent = overVideoLimit ? 'This scene is over 60 seconds. Shorten dialogue or pauses to export it.' : '';
+    if (overVideoLimit) $('video-export').setAttribute('aria-describedby', 'sm-video-limit'); else $('video-export').removeAttribute('aria-describedby');
     renderTemplates(); renderBoard(); if (editor) renderEditor(); renderLibrary(); renderCloud(); draw();
     $('notice').textContent = recoveryWarning;
     $('export-recovery').hidden = !(local.recoveryRaw || currentRecoveryRaw);
@@ -265,9 +267,10 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
     if (compiled.duration > 60000) throw new Error('Shorten the scene to 60 seconds or less before recording.');
     const frozen = validateSceneProject(project), controller = new AbortController(); recording = controller; pause(); $('video-player').pause();
     renderPreviewVisibility();
-    $('video-panel').open = true;
+    $('video-panel').hidden = false; $('video-panel').open = true;
     host.querySelectorAll('input,select,textarea,button').forEach(control => { if (!['sm-cancel-export', 'sm-close'].includes(control.id)) { control.dataset.smWasDisabled = String(control.disabled); control.disabled = true; } });
     $('cancel-export').hidden = false; $('video-progress').hidden = false; $('video-progress').value = 0; $('video-status').textContent = 'Preparing video…';
+    $('cancel-export').focus({ preventScroll: true }); $('video-panel').scrollIntoView({ block: 'nearest', behavior: reduced() ? 'instant' : 'smooth' });
     try {
       const { exportSceneVideo } = await import('./scene-video.js');
       if (controller.signal.aborted) throw new DOMException('Recording cancelled.', 'AbortError');
@@ -281,11 +284,13 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
       $('video-player').src = videoURL; $('video-download').href = videoURL; $('video-download').download = fileName(result.extension);
       $('video-result').hidden = false; $('video-status').textContent = `${result.extension.toUpperCase()} video ready. Preview it here or download it.`;
       download(result.blob, fileName(result.extension)); notify('Video ready.');
-    } catch (error) { if (!disposed) $('video-status').textContent = error.name === 'AbortError' ? 'Recording cancelled.' : error.message; }
+    } catch (error) { if (!disposed) $('video-status').textContent = error.name === 'AbortError' ? 'Recording cancelled.' : error.message ?? String(error); }
     finally {
       recording = null;
       if (!disposed) {
         host.querySelectorAll('[data-sm-was-disabled]').forEach(control => { control.disabled = control.dataset.smWasDisabled === 'true'; delete control.dataset.smWasDisabled; });
+        $('video-panel').open = true;
+        if (document.activeElement === $('cancel-export')) $('video-status').focus({ preventScroll: true });
         $('cancel-export').hidden = true; $('video-progress').hidden = true; renderPreviewVisibility(); renderCloud(); draw();
       }
     }
