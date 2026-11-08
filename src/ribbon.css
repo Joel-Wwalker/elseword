@@ -1,0 +1,158 @@
+/* Keep Ribbon's light surfaces with muted sage and slate-blue accents. */
+:root {
+  color-scheme: light;
+  --bg: #f2f6f3;
+  --panel: #e3ece7;
+  --surface: #fbfdfb;
+  --surface-hover: #e0e8e2;
+  --selected: #dce6df;
+  --ink: #283c33;
+  --muted: #4b5e54;
+  --dim: #506259;
+  --line: #cbd8d0;
+  --control-border: #7a8a80;
+  --green: #4f6859;
+  --accent: var(--green);
+  --accent-hover: #405747;
+  --on-accent: #fbfdfb;
+  --focus: #405747;
+  --blue: #506575;
+  --blue-soft: #e3eaf0;
+  --purple: var(--blue);
+  --rust: var(--blue);
+  --danger: #9a3b32;
+  --danger-surface: #fbeae6;
+  --game-bg: #0c0c0f;
+  --dialog-backdrop: rgb(19 43 33 / 42%);
+  --dialog-shadow: 0 16px 48px rgb(19 43 33 / 16%);
+}
+
+html, body { overflow-x: clip; }
+body { background: var(--bg); color: var(--ink); }
+/* Theme internal scrollbars, including lazy-loaded tools; leave the viewport native. */
+body * { scrollbar-color: var(--green) var(--panel); }
+@supports not (scrollbar-color: auto) {
+  @media (forced-colors: none) {
+    body *::-webkit-scrollbar,
+    body *::-webkit-scrollbar-corner { background: var(--panel); }
+    body *::-webkit-scrollbar-thumb { background: var(--green); border-radius: 999px; }
+    body *::-webkit-scrollbar-thumb:hover { background: var(--accent-hover); }
+  }
+}
+@media (forced-colors: active) {
+  body * { scrollbar-color: auto; }
+}
+button, input, select, textarea { border-color: var(--control-border); }
+input, select, textarea { background: var(--surface); color: var(--ink); }
+input::placeholder, textarea::placeholder { color: var(--dim); }
+button:focus-visible, a:focus-visible, summary:focus-visible,
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+input[type=checkbox], input[type=range], progress { accent-color: var(--accent); }
+h1, h2 { text-wrap: balance; }
+
+.brand { font: 600 26px/1 var(--sans); letter-spacing: -1px; gap: 12px; }
+.brand svg { width: 23px; height: 23px; }
+.topbar, .studio-nav { border-color: var(--line); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-tab:hover { color: var(--accent); background: var(--panel); }
+.save-status i { display: none; }
+.save-status.error, .modal-error { color: var(--danger); }
+.page-heading h1 { font-weight: 500; }
+.page-heading { padding-block: 32px 28px; }
+.primary-button { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.primary-button:hover { background: var(--accent-hover); color: var(--on-accent); border-color: var(--accent-hover); }
+.secondary-button { background: var(--surface); color: var(--ink); border-color: var(--control-border); }
+.secondary-button:hover { background: var(--surface-hover); color: var(--ink); border-color: var(--accent); }
+.primary-button:active { background: var(--accent-hover); }
+.secondary-button:active, .quiet-button:active, .text-button:active { background: var(--selected); }
+.quiet-button:hover, .text-button:hover { background: var(--surface-hover); color: var(--accent); }
+.danger-button, .danger-button:hover { color: var(--danger); }
+.danger-button:hover { background: var(--danger-surface); }
+.skip-link { background: var(--accent); color: var(--on-accent); }
+
+.panel { background: var(--surface); border-radius: 6px; }
+.writing-layout > .panel { margin-top: 0; }
+.section-heading h2, .panel .section-heading h2, .world-sidebar .section-heading h2 { font-weight: 500; }
+.advanced { border-color: var(--line); }
+.advanced summary { color: var(--ink); }
+.tool-drawer { background: transparent; border-color: var(--line); }
+.sound-preview span { background: var(--selected); }
+.token { background: var(--selected); border-color: var(--control-border); }
+.sentence-output { background: var(--panel); border-color: var(--line); }
+.gloss-output { background: var(--surface); border-color: var(--control-border); }
+.sticky-panel { background: transparent; }
+
+.scene-card { background: transparent; }
+.scene-card:hover { background: var(--panel); border-color: var(--line); }
+.scene-card.selected { background: var(--selected); border-color: var(--accent); }
+.context-word input { background: var(--surface); border-color: var(--control-border); }
+.context-word input:hover { border-color: var(--accent); }
+.cast-mini { background: transparent; border-color: transparent; }
+.cast-choice { background: var(--surface); border-color: var(--control-border); }
+.cast-choice[aria-pressed=true], .cast-slot-tabs .selected { background: var(--selected); border-color: var(--accent); color: var(--ink); }
+.world-player { color-scheme: dark; }
+.player-host { background: var(--game-bg); }
+
+.dictionary-sheet { background: transparent; }
+.dictionary-table th { background: var(--panel); color: var(--muted); }
+.dictionary-table td { border-color: var(--line); }
+.dictionary-table tbody tr:hover { background: var(--panel); }
+.dictionary-input { background: var(--surface); border-color: var(--control-border); }
+.dictionary-input:hover { border-color: var(--accent); }
+.search-field { background: var(--surface); border-color: var(--control-border); }
+.search-field input { background: transparent; }
+
+dialog { background: var(--surface); border-color: var(--line); box-shadow: var(--dialog-shadow); }
+dialog::backdrop { background: var(--dialog-backdrop); }
+.menu-action { background: transparent; border-color: var(--line); }
+.menu-action:hover { background: var(--panel); }
+.toast { background: var(--accent); color: var(--on-accent); border-color: var(--accent); box-shadow: none; }
+.cloud-current { background: var(--panel); border-color: var(--line); }
+
+/* Muted accents are tied to tools; primary actions keep the same sage color. */
+.nav-tab[data-view=words], .nav-tab[data-view=writing], .nav-tab[data-view=editor] { --nav-accent: var(--blue); --nav-surface: var(--blue-soft); }
+.nav-tab.active { color: var(--nav-accent, var(--green)); border-bottom-color: var(--nav-accent, var(--green)); }
+.nav-tab:hover { color: var(--nav-accent, var(--green)); background: var(--nav-surface, var(--panel)); }
+.brand, #world-title, #rules-title { color: var(--green); }
+#words-title, #writing-title { color: var(--blue); }
+.world-sidebar .scene-words .section-heading h2 { color: var(--blue); }
+.world-sidebar .cast-section .section-heading h2 { color: var(--green); }
+.scene-words .context-word input { color: var(--blue); }
+.writing-layout .sentence-output { background: var(--blue-soft); border-color: var(--line); }
+.writing-layout .large-sample { color: var(--blue); }
+.alphabet-preview { color: var(--blue); }
+.scene-maker #sm-title { color: var(--blue); }
+.scene-maker .sm-beat.selected { background: var(--blue-soft); border-color: var(--blue); }
+.scene-maker .sm-beat.is-playing { box-shadow: inset 3px 0 var(--blue); }
+.scene-maker #sm-video-export { color: var(--blue); border-color: var(--blue); }
+.scene-maker #sm-video-export:hover { background: var(--blue-soft); }
+
+/* A smaller scene leaves more of the studio visible without cropping the artwork. */
+.scene-window-bar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 14px; }
+.scene-window-bar .quiet-button { color: var(--blue); }
+#world-scene-content[hidden] { display: none; }
+.world-layout.is-scene-collapsed { grid-template-columns: minmax(0, 1fr); max-width: 942px; margin-inline: auto; }
+.is-scene-collapsed .world-sidebar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.is-scene-collapsed .language-summary { grid-column: 1 / -1; max-width: 400px; width: 100%; margin: 0; }
+.is-scene-collapsed .scene-words { grid-row: 2 / span 2; }
+.is-scene-collapsed .cast-section { border-top: 0; padding-top: 0; margin-bottom: 0; }
+.is-scene-collapsed .world-sidebar > .full { height: fit-content; }
+@media (min-width: 1101px) {
+  .world-layout { grid-template-columns: minmax(0, 640px) 270px; justify-content: center; }
+}
+@media (min-width: 441px) and (max-width: 760px) {
+  .world-main .player-host, .world-main .scene-caption { max-width: 480px; margin-inline: auto; }
+}
+
+@media (max-width: 760px) {
+  .brand { font-size: 24px; }
+  .brand svg { width: 21px; height: 21px; }
+  .page-heading { padding-block: 28px 24px; }
+}
+@media (max-width: 380px) {
+  .brand { font-size: 22px; gap: 8px; }
+  .brand svg { width: 19px; height: 19px; }
+}

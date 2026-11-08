@@ -1,0 +1,21 @@
+.account-button{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.account-button>span:first-child{font-size:19px;color:var(--green)}
+.cloud-wide{width:100%;margin-top:16px;min-height:44px;justify-content:center}
+.cloud-divider{text-align:center;color:var(--dim);font-size:10px;margin:20px 0}
+.cloud-panel form{margin-top:20px}.cloud-note{margin-top:18px;line-height:1.8}
+.cloud-feedback{font-size:12px;line-height:1.8;color:var(--green);margin-top:18px}
+.cloud-error{font-size:12px;line-height:1.8;color:var(--danger);margin-top:18px;overflow-wrap:anywhere}
+.cloud-account-line{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.cloud-account-line>span{min-width:0}.cloud-account-line button{flex-shrink:0}
+.cloud-current{margin-top:22px;padding:20px;border:1px solid var(--line);background:var(--selected)}
+.cloud-current h3{font:31px var(--pixel);color:var(--green);margin:8px 0;overflow-wrap:anywhere}
+.cloud-current .small-note{margin-top:0}.cloud-current .field-label{font-size:9px;color:var(--muted);letter-spacing:1px}
+.cloud-library-heading{display:flex;justify-content:space-between;align-items:center;margin:26px 0 10px;gap:12px}
+.cloud-library-heading h3{font:25px var(--pixel)}
+.cloud-language-list{list-style:none;padding:0;margin:0;max-height:300px;overflow-y:auto}
+.cloud-language{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:16px 0;border-top:1px solid var(--line)}
+.cloud-language>div:first-child{min-width:0}.cloud-language strong{font:24px var(--pixel);font-weight:400;overflow-wrap:anywhere}
+.cloud-language small{display:block;font-size:10px;color:var(--dim);margin-top:6px}
+.cloud-row-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}.cloud-row-actions button{min-height:40px}
+@media(max-width:1050px){.account-button .account-label{display:none}.project-actions .account-button{padding:8px}}
+@media(max-width:760px){.topbar{flex-wrap:wrap;height:auto;min-height:100px;gap:12px;padding:17px 0}.brand{width:100%}.project-actions{width:100%;justify-content:flex-end}.project-actions>label+select{margin-right:auto;width:145px}.cloud-row-actions{gap:8px}.cloud-row-actions .secondary-button{padding:10px;font-size:10px}.cloud-current{padding:16px}.cloud-language{gap:10px}}

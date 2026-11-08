@@ -1,0 +1,16 @@
+dist/
+node_modules/
+coverage/
+/.*/
+!/.github/
+*.tar.gz
+*.log
+.env
+.env.*
+!.env.example
+docs/*
+!docs/architecture.md
+!docs/development.md
+prepare-design-preview.mjs
+.DS_Store
+Thumbs.db
