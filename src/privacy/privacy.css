@@ -1,0 +1,41 @@
+.privacy-shell .topbar {
+  min-height: 76px;
+  height: auto;
+  padding-block: 16px;
+  gap: 12px 24px;
+}
+
+.privacy-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.privacy-content {
+  max-width: 70ch;
+  margin-inline: auto;
+  padding-block: 12px 20px;
+  font-size: 16px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.privacy-content section { margin-top: 32px; }
+.privacy-content p + p { margin-top: 16px; }
+.privacy-content h1 { color: var(--green); }
+.privacy-content h2 {
+  margin-bottom: 12px;
+  font: 600 26px/1.3 var(--heading-font);
+  color: var(--green);
+  text-shadow: var(--heading-depth-small);
+}
+
+.privacy-content a {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
