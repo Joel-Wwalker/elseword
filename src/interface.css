@@ -132,6 +132,13 @@ button:disabled { opacity: .45; }
 .alphabet-preview { font-size: 20px; line-height: 1.65; }
 .sentence-output { background: var(--panel); border-color: var(--control-border); border-radius: 6px; padding: 22px; }
 .sentence-options { gap: 16px; }
+.sentence-result-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+details.writing-disclosure { padding: 0; align-self: start; }
+.writing-disclosure > summary { cursor: pointer; padding: 20px 24px; min-height: 64px; color: var(--ink); }
+.writing-disclosure > summary::marker { color: var(--muted); }
+.writing-disclosure > summary h2 { display: inline; font: 600 24px/1.25 var(--heading-font, var(--sans)); text-shadow: var(--heading-depth-small); overflow-wrap: anywhere; }
+.writing-disclosure > summary > span { display: block; margin: 5px 0 0 20px; color: var(--muted); font: 14px/1.5 var(--sans); overflow-wrap: anywhere; }
+.writing-disclosure-body { padding: 0 24px 24px; }
 .check-label { min-height: 44px; }
 .gloss-output { font-family: var(--sans); font-size: 21px; line-height: 1.8; background: var(--surface); border-radius: 6px; }
 .gloss-footer { gap: 16px; }

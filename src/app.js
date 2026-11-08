@@ -19,6 +19,11 @@ const WORDS_PER_PAGE = 15;
 const SCENE_HIDDEN_KEY = 'elseword-scene-hidden-v1';
 let storage;
 try { storage = localStorage; } catch { storage = {getItem:()=>null,setItem:()=>{throw new Error('Your browser has disabled local storage. Export a backup to keep your work.');}}; }
+for(const id of ['writing-alphabet','writing-lookup']){
+  const panel=$(id), key=`elseword-${id}-open-v1`;
+  try { panel.open=storage.getItem(key)==='true'; } catch { /* Keep optional tools usable without storage. */ }
+  panel.addEventListener('toggle',()=>{try { storage.setItem(key,String(panel.open)); } catch { /* The current page still remembers this choice. */ }});
+}
 const textAudio = new TextAudio({storage});
 textAudio.subscribe(({enabled,supported,ready}) => {
   const button=$('text-sound-toggle');
@@ -179,6 +184,7 @@ function renderAlphabet() {
   const lang=language(), presetId=identifyWritingPreset(lang.script);
   $('script-style').innerHTML=WRITING_PRESETS.map(preset=>`<option value="${preset.id}">${escapeHTML(preset.name)}</option>`).join('')+'<option value="custom">My own symbols</option>';
   $('script-style').value=presetId;$('script-direction').value=lang.script.direction;
+  $('alphabet-current-style').textContent=`${WRITING_PRESETS.find(preset=>preset.id===presetId)?.name??'My own symbols'}${lang.script.direction==='rtl'?' · Right to left':''}`;
   $('script-description').textContent=WRITING_PRESETS.find(preset=>preset.id===presetId)?.description??'Your own alphabet. Edit any symbol below.';
   $('alphabet-preview').textContent=renderWriting('a b c d e f g h i j k l m n o p q r s t u v w x y z',lang);$('alphabet-preview').dir=lang.script.direction;
   const letters=[...new Set([...'abcdefghijklmnopqrstuvwxyz',...lang.sounds.consonants,...lang.sounds.vowels])];
