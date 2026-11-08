@@ -1,6 +1,6 @@
-# Elseword
+# Oddtongue
 
-Elseword is a browser-based studio for making constructed languages and trying them in animated conversations. Shape a language's sounds, edit its vocabulary and grammar, then write dialogue and build scenes with it.
+Oddtongue is a browser-based studio for making constructed languages and trying them in animated conversations. Shape a language's sounds, edit its vocabulary and grammar, then write dialogue and build scenes with it.
 
 The app works without an account. Languages and scene drafts save in your browser; JSON downloads let you keep portable backups. Optional Supabase integration adds private cloud copies.
 
@@ -45,7 +45,7 @@ See [development setup](docs/development.md) to configure your own Supabase back
 
 ## Development
 
-Elseword uses JavaScript ES modules and CSS, bundled with esbuild. Supabase provides optional authentication and storage; PGlite runs the database tests locally.
+Oddtongue uses JavaScript ES modules and CSS, bundled with esbuild. Supabase provides optional authentication and storage; PGlite runs the database tests locally.
 
 - [Development guide](docs/development.md): commands, browser checks and optional cloud setup.
 - [Architecture](docs/architecture.md): source layout and the path from editing to local or cloud persistence.

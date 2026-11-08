@@ -4,8 +4,8 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f2f6f3">
   <meta name="description" content="Create a language, write dialogue, and make animated scenes with your words.">
-  <title>Elseword</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%234f6859' d='M4 4h24v6H10v3h14v6H10v3h18v6H4z'/%3E%3C/svg%3E">
+  <title>Oddtongue</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%234f6859' fill-rule='evenodd' d='M8 4h16v4h4v16h-4v4H8v-4H4V8h4zM10 10v12h12V10z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./styles.css"><link rel="stylesheet" href="./scenes.css"><link rel="stylesheet" href="./cloud.css"><link rel="stylesheet" href="./language-tools.css"><link rel="stylesheet" href="./interface.css"><link rel="stylesheet" href="./ribbon.css"><link rel="stylesheet" href="./heading-type.css">
   <script type="module" src="./app.js"></script>
 </head>
@@ -13,7 +13,7 @@
   <a class="skip-link" href="#main">Skip to the studio</a>
   <div class="shell">
     <header class="topbar">
-      <a class="brand" href="#world" aria-label="Elseword home"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M4 4h24v6H10v3h14v6H10v3h18v6H4z"/></svg>elseword<span class="beta-label">STUDIO</span></a>
+      <a class="brand" href="#world" aria-label="Oddtongue home"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M8 4h16v4h4v16h-4v4H8v-4H4V8h4zM10 10v12h12V10z"/></svg>oddtongue<span class="beta-label">STUDIO</span></a>
       <div class="project-actions"><label class="sr-only" for="language-switch">Current language</label><select id="language-switch"></select><button class="icon-button" id="new-language" aria-label="Create a language" title="Create a language">＋</button><button class="quiet-button account-button" id="account-button" aria-label="Sign in for cloud saves"><span aria-hidden="true">☁</span><span class="account-label">Sign in</span></button><button class="quiet-button" id="project-menu">Files</button></div>
     </header>
     <nav class="studio-nav" aria-label="Studio areas">
@@ -64,7 +64,7 @@
         <details id="writing-lookup" class="panel gloss-panel writing-disclosure"><summary><h2>Word lookup</h2><span>Find words in your dictionary</span></summary><div class="writing-disclosure-body"><p class="section-copy">Look up English words in your dictionary. Use the sentence builder for grammar.</p><div class="gloss-grid"><label>English<textarea id="gloss-input" rows="4" maxlength="2000" placeholder="Hello, I want one bread, please.">Hello, I want one bread, please.</textarea></label><div><div class="field-label" id="gloss-language-label">Language</div><div id="gloss-output" class="gloss-output"></div></div></div><div class="gloss-footer"><p id="unknown-words" class="small-note"></p><button id="copy-gloss" class="text-button">Copy text ↗</button></div></div></details>
       </section>
     </main>
-    <footer class="footer"><span>Elseword</span><span>Your work saves on this device.</span></footer>
+    <footer class="footer"><span>Oddtongue</span><span>Your work saves on this device.</span></footer>
   </div>
   <div id="toast" class="toast" role="status" hidden></div>
   <dialog id="studio-dialog"><div id="dialog-content"></div></dialog>

@@ -1,6 +1,6 @@
 # Optional cloud storage
 
-Elseword works without a backend. Connecting a Supabase project adds email-link sign-in, optional Google sign-in, and private cloud copies of languages and scenes. Local drafts and downloaded files remain independent of cloud copies.
+Oddtongue works without a backend. Connecting a Supabase project adds email-link sign-in, optional Google sign-in, and private cloud copies of languages and scenes. Local drafts and downloaded files remain independent of cloud copies.
 
 ## Apply the migrations
 
@@ -35,7 +35,7 @@ https://<app-domain>/
 http://localhost:58110/
 ```
 
-The app returns sign-ins to its current directory with a trailing slash. If deployed under a path, allow that path as well, such as `https://<app-domain>/elseword/`. Email links use PKCE: open the sign-in link in the browser that requested it. Configure email delivery for your deployment and verify that links arrive and return to the app.
+The app returns sign-ins to its current directory with a trailing slash. If deployed under a path, allow that path as well, such as `https://<app-domain>/oddtongue/`. Email links use PKCE: open the sign-in link in the browser that requested it. Configure email delivery for your deployment and verify that links arrive and return to the app.
 
 For optional Google sign-in:
 
