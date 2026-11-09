@@ -107,7 +107,9 @@ export async function createSceneRenderer(canvas) {
   const paintActor = actor => {
     const character = CHARACTERS.find(character => character.id === actor.id);
     const atlas = assets.atlases.get(character.atlas), cellWidth = atlas.width / 4, cellHeight = atlas.height / 2;
-    context.save(); context.translate(actor.x + (actor.flip ? 64 : 0), actor.y); context.scale(actor.flip ? -1 : 1, 1);
+    context.save(); context.translate(actor.x + 32, actor.y + 64);
+    context.rotate(actor.lean * Math.PI / 180);
+    context.scale(actor.flip ? -1 : 1, 1); context.translate(-32, -64);
     context.drawImage(atlas, actor.pose * cellWidth, character.row * cellHeight, cellWidth, cellHeight, 0, 0, 64, 64);
     context.restore();
   };
@@ -117,6 +119,8 @@ export async function createSceneRenderer(canvas) {
     context.setTransform(canvas.width / LOGICAL_WIDTH, 0, 0, canvas.height / LOGICAL_HEIGHT, 0, 0);
     context.imageSmoothingEnabled = false;
     context.fillStyle = '#08080b'; context.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+    context.save(); context.beginPath(); context.rect(0, 0, 384, 216); context.clip();
+    context.translate(frame.camera.x, frame.camera.y); context.scale(frame.camera.scale, frame.camera.scale);
     context.drawImage(room.background, 0, 0, 384, 216);
     if (frame.prop.mode !== 'counter') paintProp(frame.prop);
     paintActor(frame.actors[1]);
@@ -124,6 +128,11 @@ export async function createSceneRenderer(canvas) {
     if (frame.prop.mode === 'counter') paintProp(frame.prop);
     paintActor(frame.actors[0]);
     if (room.ambient) context.drawImage(room.ambient, 0, 0, 384, 216);
+    for (const effect of frame.effects) {
+      context.globalAlpha = effect.opacity; context.fillStyle = effect.color;
+      context.fillRect(effect.x, effect.y, effect.width, effect.height);
+    }
+    context.restore();
     context.strokeStyle = '#d6d0dd'; context.lineWidth = 2; context.strokeRect(13, 223, 358, 124);
     const speaker = CHARACTERS.find(character => character.id === frame.speakerId);
     context.textAlign = 'left'; context.direction = 'ltr'; context.textBaseline = 'top'; context.font = '12px VT323, monospace'; context.fillStyle = speaker.color;

@@ -71,7 +71,7 @@ function episode(definition) {
 }
 
 function scene(definition) {
-  const original = episode({ id: 'original', title: definition.tag, tag: definition.tag, description: definition.description, lines: definition.lines });
+  const original = episode({ id: 'original', title: definition.tag, tag: definition.tag, description: definition.description, lines: definition.lines, makerActions: definition.makerActions });
   const episodes = [original, ...(definition.episodes ?? []).map(episode)];
   // Original aliases keep the room grid and older scene consumers compatible.
   return { ...definition, lines: original.lines, words: original.words, animation: original.animation, title: original.title, episodes };
@@ -82,6 +82,7 @@ export const SCENES = [
     id: 'bakery', name: 'The bakery', location: 'A quiet afternoon',
     description: 'Warm window light, a wooden counter, and a loaf with little regard for the size of its bag.',
     tag: 'A little misunderstanding', characters: ['moss', 'kiln'], prop: 'bread',
+    makerActions: { 1: { action: 'drop', cue: 'end' } },
     lines: [
       [0, 'One bread, please.', polite(noun('bread', { determiner: 'one' }))],
       [1, 'One bread.', fragment(noun('bread', { determiner: 'one' }))],

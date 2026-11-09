@@ -1,3 +1,5 @@
+import { sampleAction, sampleImpact } from './scene-direction.js';
+
 /** All coordinates use the room's 384×216 grid; sprite cells are 64×64. */
 const counterProp = (x, y, scale, bounds, supportY) => ({
   x, y, scale, bounds, supportY, mode: 'counter', viewBox: [66, 40], zIndex: 5,
@@ -93,7 +95,9 @@ export function sampleSceneLayout(id, {
       : t < lookAwayStart ? -1 + 2 * ease(t / 800) : 1 - 2 * ease((t - lookAwayStart) / 1600);
   });
   const { prop } = layout;
-  const delivery = reduced ? 1 : clamp((t - offerStart) / 650);
+  const deliveryAction = original && prop.mode === 'counter'
+    ? sampleAction(id === 'bakery' ? 'drop' : 'pass', t - offerStart, { reduced }) : null;
+  const delivery = reduced ? 1 : deliveryAction ? deliveryAction.travel : clamp((t - offerStart) / 650);
   const present = episodeType === 'lost-property' || episodeType === 'cold-tea';
   const opacity = present || prop.mode === 'ground' ? 1
     : reduced ? Number(t >= offerStart) : clamp((t - offerStart) / 160);
@@ -112,7 +116,28 @@ export function sampleSceneLayout(id, {
     },
     walking,
     step,
+    effects: [],
+    impact: 0,
   };
+  if (deliveryAction) {
+    const action = deliveryAction;
+    frame.prop.y -= action.lift;
+    frame.characters[1].lean = -action.lean;
+    frame.impact = action.impact;
+    frame.effects = sampleImpact({ x: frame.prop.x + (prop.bounds[0] + prop.bounds[2]) * prop.scale / 2,
+      y: prop.supportY, age: action.impactAge, reduced });
+    const reaction = sampleAction('recoil', action.impactAge - 100, { reduced });
+    if (reaction.active) {
+      frame.characters[0].lean = -reaction.lean;
+      frame.characters[0].reacting = true;
+    }
+  }
+  const reaction = sampleAction('recoil', t - reactionStart, { reduced });
+  if (original && reaction.active) {
+    frame.characters[0].lean = -reaction.lean;
+    frame.characters[0].reacting = true;
+    frame.characters[1].reacting = t - reactionStart > 150;
+  }
   if (episodeType === 'cold-tea') {
     const cooling = clamp((t - coolStart) / Math.max(1, coolEnd - coolStart));
     frame.steam = {
