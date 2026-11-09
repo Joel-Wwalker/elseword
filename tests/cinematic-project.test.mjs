@@ -119,7 +119,8 @@ function canvasContext() {
     translate(x, y) { multiply([1, 0, 0, 1, x, y]); },
     scale(x, y) { multiply([x, 0, 0, y, 0, 0]); },
     rotate(angle) { multiply([Math.cos(angle), Math.sin(angle), -Math.sin(angle), Math.cos(angle), 0, 0]); },
-    beginPath() {}, rect(...args) { record('clipRect', args); }, clip() { clipped = true; },
+    beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, fill() {},
+    rect(...args) { record('clipRect', args); }, clip() { clipped = true; },
     fillRect(...args) { record('fillRect', args); }, strokeRect(...args) { record('strokeRect', args); },
     drawImage(...args) { record('image', args); }, fillText(...args) { record('text', args); },
     measureText(text) { return { width: [...text].length * parseFloat(this.font) * 0.6 }; },
@@ -154,8 +155,15 @@ test('video renderer clips and moves every room layer together while restoring c
     assert.equal(caption.clipped, false);
   }
   calls.length = 0;
-  const contactFrame = renderer.draw(scene('bakery', ['drop']), 385);
+  const contactFrame = renderer.draw(scene('bakery', ['drop']), 485);
   assert.ok(contactFrame.effects.length > 0);
+  const faces = calls.filter(call => call.type === 'image' && call.args[0].source?.includes('/expression-'));
+  assert.equal(faces.length, 2, 'Both startled faces are drawn into the exported frame');
+  for (const face of faces) {
+    const body = calls[calls.indexOf(face) - 1];
+    assert.equal(body.type, 'image');
+    assert.deepEqual(face.matrix, body.matrix, 'The face follows its body flip and lean');
+  }
   const marks = calls.filter(call => call.type === 'fillRect' && call.clipped);
   assert.equal(marks.length, contactFrame.effects.length);
   const lastActor = calls.findLastIndex(call => call.type === 'image' && call.args.length === 9);

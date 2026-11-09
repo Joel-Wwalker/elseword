@@ -118,9 +118,13 @@ export function sampleSceneLayout(id, {
     step,
     effects: [],
     impact: 0,
+    reactionTimes: [[], []],
   };
   if (deliveryAction) {
     const action = deliveryAction;
+    const contactAt = t - action.impactAge;
+    frame.reactionTimes[0].push(contactAt + 100);
+    frame.reactionTimes[1].push(contactAt);
     frame.prop.y -= action.lift;
     frame.characters[1].lean = -action.lean;
     frame.impact = action.impact;
@@ -133,6 +137,10 @@ export function sampleSceneLayout(id, {
     }
   }
   const reaction = sampleAction('recoil', t - reactionStart, { reduced });
+  if (original) {
+    frame.reactionTimes[0].push(reactionStart);
+    frame.reactionTimes[1].push(reactionStart + 150);
+  }
   if (original && reaction.active) {
     frame.characters[0].lean = -reaction.lean;
     frame.characters[0].reacting = true;

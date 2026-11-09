@@ -173,3 +173,19 @@ test('Next conversation cycles episodes and reports the selected context without
   player.nextEpisode();
   assert.equal(player.scene.episodeId, 'substitution');
 });
+
+test('World facial cues follow dialogue and contacts without sticking after a replay', () => {
+  const player = playerFixture();
+  player.setScene('bakery');
+  const first = player.scene.lines[0];
+  player.elapsed = 500; player.render();
+  assert.equal(player.sprites[0].dataset.expression, first.expressions[0]);
+  const contact = player.timing.offerStart + 385;
+  player.elapsed = contact + 100; player.render();
+  assert.deepEqual(player.sprites.map(sprite => sprite.dataset.expression), ['startled', 'startled']);
+  player.motion.matches = true; player.render();
+  assert.deepEqual(player.sprites.map(sprite => sprite.dataset.expression), ['startled', 'startled']);
+  player.elapsed = 500; player.render();
+  assert.equal(player.sprites[0].dataset.expression, first.expressions[0]);
+  assert.notEqual(player.sprites[0].dataset.expression, 'startled');
+});

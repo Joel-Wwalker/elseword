@@ -27,6 +27,10 @@ Opening the scene editor loads `scene-maker.js` on demand. It owns editor state,
 
 `scene-project.js` validates portable scene documents and compiles their dialogue and actions into a timed sequence. `scene-renderer.js` draws that sequence on a canvas. The editor preview and `scene-video.js` use the same renderer; the video module is loaded when needed and records a browser-generated stream with MediaRecorder.
 
+`scene-expressions.js` samples facial expressions from the timeline independently of body poses. Built-in dialogue carries a cue for each character. The speaker receives its cue immediately; the listener follows after 220 milliseconds. Custom builder questions make the speaker curious, while other custom lines default to neutral. An explicit per-line expression overrides the speaker's cue. Action reactions briefly take priority as startled expressions, then return to the line's cue. Seeking reconstructs this state from time, and reduced motion preserves the facial cues.
+
+Scene lines store `expression` as `auto`, `neutral`, `curious`, `annoyed`, `pleased`, `worried`, or `startled`. Missing settings in older version-one files default to `auto`. Explicit choices survive line conversion, copying, local saves and file exports. Cloud validation accepts the same values after the scene-expression migration; the derived character cues and reaction timestamps are not saved in the document.
+
 `text-audio.js` synthesizes short character sounds through Web Audio and manages playback and the studio sound preference. It does not record a microphone or generate speech.
 
 ## Interface styles

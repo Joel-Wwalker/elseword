@@ -4,6 +4,7 @@ import { renderSceneLine } from './scene-language.js';
 import { getSceneLayout, shouldFlipCharacter } from './scene-layout.js';
 import { isAudibleCharacter } from './text-audio.js';
 import { sampleAction, sampleImpact, sampleCamera } from './scene-direction.js';
+import { SCENE_EXPRESSIONS, sampleExpressions } from './scene-expressions.js';
 
 export const SCENE_STORAGE_KEY = 'little-languages-sceneprojects-v1';
 export const SCENE_RECOVERY_KEY = `${SCENE_STORAGE_KEY}-recovery`;
@@ -122,6 +123,7 @@ export function validateSceneProject(value) {
       if (!template.lines[beat.template.lineIndex]) throw new Error('Template refers to a missing dialogue line.');
     }
     beat.action = oneOf(source.action ?? 'none', SCENE_ACTIONS, 'action');
+    beat.expression = oneOf(source.expression === undefined ? 'auto' : source.expression, SCENE_EXPRESSIONS, 'expression');
     beat.cue = oneOf(source.cue ?? 'start', SCENE_CUES, 'action cue');
     beat.wordIndex = integer(source.wordIndex ?? 0, 0, 299, 'Action word index');
     beat.pauseMs = integer(source.pauseMs ?? 600, 0, 5000, 'Pause');
@@ -156,9 +158,12 @@ export function compileSceneProject(value) {
   const project = validateSceneProject(value), audioEvents = [];
   let cursor = 0;
   const beats = project.beats.map(beat => {
+    const templateLine = beat.mode === 'template' ? templateScene(beat.template).lines[beat.template.lineIndex] : null;
     const source = beat.mode === 'builder' ? composeSentence(beat.options, project.language)
-      : beat.mode === 'template' ? renderSceneLine(templateScene(beat.template).lines[beat.template.lineIndex], project.language)
+      : templateLine ? renderSceneLine(templateLine, project.language)
         : { text: beat.text, english: beat.english };
+    const expressions = [...(templateLine?.expressions ?? ['neutral', 'neutral'])];
+    if (beat.mode === 'builder' && beat.options.question) expressions[beat.speaker] = 'curious';
     const text = beat.mode === 'literal' ? source.text : renderWriting(source.text, project.language);
     const english = source.english, characters = points(text), start = cursor;
     const speechEnd = start + characters.length * TYPE_INTERVAL;
@@ -176,7 +181,7 @@ export function compileSceneProject(value) {
       if (isAudibleCharacter(character)) audioEvents.push({ time: start + (index + 1) * TYPE_INTERVAL, voice: project.cast[beat.speaker], character });
     });
     cursor = end;
-    return { ...beat, text, english, error, quiet, romanized: source.text, start, end, speechEnd, actionAt, characters };
+    return { ...beat, expressions, text, english, error, quiet, romanized: source.text, start, end, speechEnd, actionAt, characters };
   });
   const errors = beats.flatMap((beat, index) => beat.error ? [{ beatId: beat.id, line: index + 1, message: beat.error }] : []);
   return { project, beats, duration: cursor, audioEvents, errors };
@@ -227,7 +232,7 @@ export function sampleSceneProject(compiled, time, { reduced = false } = {}) {
     const character = CHARACTERS.find(character => character.id === project.cast[role]);
     return { id: character.id, x, y, lean: 0, pose: role === beat.speaker && t < beat.speechEnd ? 1 : 0, flip: shouldFlipCharacter(character.row, role) };
   });
-  const prop = propFrame(project), effects = [];
+  const prop = propFrame(project), effects = [], reactionTimes = [[], []];
   let impact = 0;
   const facing = actor => (CHARACTERS.find(character => character.id === actor.id).row === 0 ? 1 : -1) * (actor.flip ? -1 : 1);
   for (const action of compiled.beats) {
@@ -270,6 +275,9 @@ export function sampleSceneProject(compiled, time, { reduced = false } = {}) {
     }
     const propContact = ['pass', 'drop'].includes(action.action) && prop.type !== 'none';
     if (propContact || action.action === 'recoil') {
+      const contact = t - motion.impactAge, actorReaction = propContact ? contact : action.actionAt;
+      if (actorReaction <= t) reactionTimes[role].push(actorReaction);
+      if (contact + 100 <= t) reactionTimes[1 - role].push(contact + 100);
       const x = propContact ? prop.x + (prop.shape[0] + prop.shape[2]) * prop.scale / 2 : actor.x + 32;
       const y = propContact ? prop.supportY ?? prop.y + prop.shape[3] * prop.scale : actor.y + 64;
       effects.push(...sampleImpact({ x, y, age: motion.impactAge, reduced }));
@@ -283,6 +291,8 @@ export function sampleSceneProject(compiled, time, { reduced = false } = {}) {
       }
     }
   }
+  const expressions = sampleExpressions({ time: t, start: beat.start, speaker: beat.speaker, expressions: beat.expressions, expression: beat.expression, reactionTimes });
+  actors.forEach((actor, role) => { actor.expression = expressions[role]; });
   for (const actor of actors) actor.lean = clamp(actor.lean, -3, 3);
   // The rooftop bench reaches x=140; mirrored atlas poses can begin six pixels
   // inside their cell, so even a recoil must keep the cell at or beyond x=134.

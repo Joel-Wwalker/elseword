@@ -11,8 +11,10 @@ Create a Supabase project, then apply these files once, in filename order:
 | 1 | [`202611070001_cloud_languages.sql`](migrations/202611070001_cloud_languages.sql) | Language storage, document validation, owner read policies, and versioned save/delete functions. |
 | 2 | [`202611080001_language_tools.sql`](migrations/202611080001_language_tools.sql) | Language v2 validation for word families, sound rules, and phrasebooks; keeps v1 support without rewriting existing rows. |
 | 3 | [`202611080002_cloud_scenes.sql`](migrations/202611080002_cloud_scenes.sql) | Scene storage, validation, owner read policies, and versioned save/delete functions. |
-
 | 4 | [`202611090001_language_catalog.sql`](migrations/202611090001_language_catalog.sql) | Private catalog of 1,000 language blueprints and anonymous single-language selection. |
+| 5 | [`202611090002_scene_draft_references.sql`](migrations/202611090002_scene_draft_references.sql) | Keeps bounded, unresolved dictionary references saveable as scene drafts. |
+| 6 | [`202611090003_generation_version.sql`](migrations/202611090003_generation_version.sql) | Accepts an optional generator version on languages and embedded scene snapshots. |
+| 7 | [`202611090004_scene_expressions.sql`](migrations/202611090004_scene_expressions.sql) | Accepts optional per-line expressions without changing the scene format version, stored documents, or ownership rules. |
 
 The SQL expects Supabase's `auth.users`, `auth.uid()`, `anon`, and `authenticated` roles. Use your migration runner, or apply the files manually in the SQL editor. For manual installation, wrap the first file in `BEGIN;` and `COMMIT;`; the later files already contain transaction boundaries. Run and verify one file before continuing to the next.
 

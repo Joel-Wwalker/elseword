@@ -1,6 +1,8 @@
 import { CHARACTERS, SCENES } from './scenes.js';
 import { renderRoom, propSVG } from './scene-player.js';
 import { SCENE_PROPS, sampleSceneProject } from './scene-project.js';
+import { CHARACTER_FACE_ATLASES, resolveCharacterFace } from './character-faces.js';
+import { paintFace } from './character-face-renderer.js';
 
 export const SCENE_CANVAS_WIDTH = 768;
 export const SCENE_CANVAS_HEIGHT = 720;
@@ -48,7 +50,7 @@ function preloadAssets() {
         const [background, foreground, ambient] = await Promise.all([svgImage(room.background), svgImage(room.foreground), svgImage(room.ambient)]);
         return [scene.id, { background, foreground, ambient }];
       })),
-      Promise.all([...new Set(CHARACTERS.map(character => character.atlas))].map(async atlas => [atlas, await loadImage(new URL(atlas, document.baseURI).href)])),
+      Promise.all([...new Set([...CHARACTERS.map(character => character.atlas), ...CHARACTER_FACE_ATLASES])].map(async atlas => [atlas, await loadImage(new URL(atlas, document.baseURI).href)])),
       Promise.all(SCENE_PROPS.filter(type => type !== 'none').map(async type => [type, await svgImage(propSVG(type), 66, type === 'umbrella' ? 76 : 40)])),
     ]);
     if (document.fonts?.load) await document.fonts.load('16px VT323');
@@ -111,6 +113,8 @@ export async function createSceneRenderer(canvas) {
     context.rotate(actor.lean * Math.PI / 180);
     context.scale(actor.flip ? -1 : 1, 1); context.translate(-32, -64);
     context.drawImage(atlas, actor.pose * cellWidth, character.row * cellHeight, cellWidth, cellHeight, 0, 0, 64, 64);
+    const face = resolveCharacterFace(character.id, actor.pose, actor.expression);
+    if (face) paintFace(context, assets.atlases.get(face.atlas), face);
     context.restore();
   };
   const draw = (compiled, time, options = {}) => {
