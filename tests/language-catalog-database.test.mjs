@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createLanguage, validateLanguage } from '../src/engine.js';
 
 import { languageFromBlueprint as expand } from '../src/language-generator.js';
+import { incompatibleMarkers } from '../src/generator-diagnostics.js';
 
 let db, blueprints;
 before(async () => {
@@ -42,6 +43,11 @@ test('every catalog recipe expands into a complete editable language', () => {
     assert.ok(first.words.every(word => !word.locked));
     assert.equal(first.revision, 1);
     assert.equal(first.grammar.order, blueprint.grammar.order);
+    assert.deepEqual(incompatibleMarkers(first), [], blueprint.seed);
+    const markerKeys = ['plural', 'past', 'future', 'negative', 'question'];
+    if (new Set(markerKeys.map(key => blueprint.grammar[key])).size === 5) {
+      assert.equal(new Set(markerKeys.map(key => first.grammar[key])).size, 5, blueprint.seed);
+    }
     assert.ok(new Set(first.words.filter(word => !word.family).map(word => word.word)).size > 180);
   }
   assert.deepEqual(expand(blueprints[0]), expand(blueprints[0]));
