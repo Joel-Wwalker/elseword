@@ -2,6 +2,7 @@ import { CORE_VOCAB } from './vocabulary.js';
 import { RUNE_GLYPHS } from './writing-presets.js';
 import { clauseFromSelections, clauseSyntax, englishSentence, entryFor, pluralEntry } from './sentence-grammar.js';
 import { literal, token, join, renderNode } from './sentence-syntax.js';
+import { generationQuality } from './generation-quality.js';
 export { CORE_VOCAB };
 
 const preset = (id, name, description, consonants, vowels, patterns, minSyllables = 1, maxSyllables = 3) => Object.freeze({
@@ -24,6 +25,7 @@ const MAX_WORDS = 2000;
 const COMMON_PLURALS = Object.freeze({ books: 'book', tickets: 'ticket', coins: 'coin', stars: 'star', children: 'child', people: 'person', leaves: 'leaf' });
 const COMMON_ALIASES = Object.freeze({ is: 'be', are: 'be', am: 'be', has: 'have', needs: 'need', coming: 'come', said: 'say', stops: 'stop', does: 'do', asked: 'ask' });
 const soundWitnesses = new Map();
+const qualityWitnesses = new Map();
 const clone = (value) => structuredClone(value);
 const normalizeKey = (value) => String(value ?? '').normalize('NFC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
 const charLength = (value) => Array.from(value).length;
@@ -186,6 +188,7 @@ export function validateLanguage(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Import must contain a language object.');
   if (JSON.stringify(value).length > MAX_JSON) throw new Error('Import is too large (maximum 1 MB).');
   if (![1, 2].includes(value.version)) throw new Error('Unsupported language version; expected version 1 or 2.');
+  if (value.generationVersion !== undefined && value.generationVersion !== 2) throw new Error('Unsupported generation version; expected 2 or no generation version.');
   if (!Array.isArray(value.words) || value.words.length > MAX_WORDS) throw new Error(`Words must be an array of at most ${MAX_WORDS} entries.`);
   const selected = PRESETS.find((entry) => entry.id === value.preset) ?? PRESETS[0];
   const seed = textField(typeof value.seed === 'number' && Number.isFinite(value.seed) ? String(value.seed) : value.seed, 'Seed', 128, { fallback: 'luma', empty: false });
@@ -266,7 +269,8 @@ export function validateLanguage(value) {
   });
   const revision = value.revision ?? 0;
   if (!Number.isSafeInteger(revision) || revision < 0 || revision > 1_000_000) throw new Error('Revision must be a nonnegative integer up to 1000000.');
-  return { version: 2, id, name, seed, preset: selected.id, sounds, grammar, script: { style, direction, glyphs }, words, phrases, revision };
+  return { version: 2, id, name, seed, preset: selected.id, sounds, grammar, script: { style, direction, glyphs }, words, phrases, revision,
+    ...(value.generationVersion === 2 ? { generationVersion: 2 } : {}) };
 }
 
 function sampledWord(sounds, random) {
@@ -313,16 +317,34 @@ function soundWitness(sounds) {
   throw new Error('No word matching these sound rules was found within the generation limit. Relax the restrictions or add sounds.');
 }
 
+function qualityWitness(sounds, plural, allowed) {
+  const signature = JSON.stringify([sounds, plural]);
+  if (qualityWitnesses.has(signature)) return qualityWitnesses.get(signature);
+  const random = randomFor(`generation-v2|${signature}`);
+  let witness = null;
+  for (let attempt = 0; attempt < 4096; attempt++) {
+    const candidate = sampledWord(sounds, random);
+    if (allowed(candidate)) { witness = candidate; break; }
+  }
+  if (qualityWitnesses.size >= 64) qualityWitnesses.delete(qualityWitnesses.keys().next().value);
+  qualityWitnesses.set(signature, witness);
+  return witness;
+}
+
 export function generateWord(language, key, salt = 0) {
   const selected = PRESETS.find((entry) => entry.id === language?.preset) ?? PRESETS[0];
   const sounds = normalizeSounds(language?.sounds, selected.sounds);
   const activeRules = sounds.rules && ([...sounds.rules.initial, ...sounds.rules.final, ...sounds.rules.forbidden].length || Object.keys(sounds.rules.weights).length);
   const seedSounds = activeRules ? sounds : Object.fromEntries(Object.entries(sounds).filter(([key]) => key !== 'rules'));
   const random = randomFor(`${language?.seed ?? 'luma'}|${normalizeKey(key)}|${salt}|${JSON.stringify(seedSounds)}`);
-  const fallback = soundWitness(sounds);
+  const quality = generationQuality({ ...language, sounds });
+  const preferred = quality && qualityWitness(sounds, language?.grammar?.plural ?? '', quality);
+  // An impossible custom inventory still produces its requested forms. Default
+  // profiles have a witness, including their derived plural boundary.
+  const fallback = preferred || soundWitness(sounds);
   for (let attempt = 0; attempt < 128; attempt++) {
     const candidate = sampledWord(sounds, random);
-    if (matchesRules(candidate, sounds.rules)) return candidate;
+    if (matchesRules(candidate, sounds.rules) && (!preferred || quality(candidate))) return candidate;
   }
   return fallback;
 }
@@ -355,7 +377,9 @@ export function createLanguage(options = {}) {
   const name = textField(options.name, 'Language name', 60, { fallback: 'Luma', empty: false });
   const seed = textField(typeof options.seed === 'number' ? String(options.seed) : options.seed, 'Seed', 128, { fallback: 'luma', empty: false });
   const language = { version: 2, id: `lang-${hash(`${seed}|${name}|${selected.id}`).toString(36)}`, name, seed, preset: selected.id, sounds: clone(selected.sounds), grammar: clone(DEFAULT_GRAMMAR), script: clone(DEFAULT_SCRIPT), words: [], phrases: [], revision: 0 };
-  Object.assign(language.grammar, generateGrammarMarkers(language));
+  if (options.generationVersion !== 1) language.generationVersion = options.generationVersion ?? 2;
+  if (options.grammar) Object.assign(language.grammar, options.grammar);
+  Object.assign(language.grammar, generateGrammarMarkers(language, ['plural', 'past', 'future', 'negative', 'question'].filter(key => options.grammar?.[key] === undefined)));
   const anchors = selected.id === 'soft' ? { one: 'na', bread: 'poma', please: 'li' } : {};
   const used = new Set(Object.values(anchors));
   language.words = CORE_VOCAB.map((entry) => {
@@ -369,13 +393,17 @@ export function createLanguage(options = {}) {
 /** Short markers use the inventory; whole-word restrictions do not constrain affixes. */
 export function generateGrammarMarkers(language, replace = ['plural', 'past', 'future', 'negative', 'question']) {
   const sounds = normalizeSounds(language.sounds);
-  const markerLanguage = { ...language, sounds: { ...sounds, rules: undefined, minSyllables: 1, maxSyllables: 1 } };
+  const markerLanguage = { ...language, grammar: { ...language.grammar, plural: '' }, sounds: { ...sounds, rules: undefined, minSyllables: 1, maxSyllables: 1 } };
   const markers = {}, used = new Set(['plural', 'past', 'future', 'negative', 'question'].filter(key => !replace.includes(key)).map(key => language.grammar[key]).filter(Boolean));
   for (const key of replace) {
     let value = sounds.vowels[0];
     for (let attempt = 0; attempt < 64; attempt++) {
       const candidate = generateWord(markerLanguage, key, `grammar:${attempt}`);
       if (charLength(candidate) > 12) continue;
+      if (key === 'plural') {
+        const quality = generationQuality({ ...language, sounds, grammar: { ...language.grammar, plural: candidate } });
+        if (quality && !qualityWitness(sounds, candidate, quality)) continue;
+      }
       value = candidate;
       if (!used.has(value)) break;
     }

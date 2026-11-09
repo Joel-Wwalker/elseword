@@ -29,7 +29,7 @@ before(async () => {
     grant execute on function auth.uid() to anon,authenticated;
     insert into auth.users values ('${alice}'),('${bob}'),('${charlie}');
   `);
-  for (const name of ['202611070001_cloud_languages.sql', '202611080001_language_tools.sql', '202611080002_cloud_scenes.sql']) {
+  for (const name of ['202611070001_cloud_languages.sql', '202611080001_language_tools.sql', '202611080002_cloud_scenes.sql', '202611090003_generation_version.sql']) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
   }
 });
