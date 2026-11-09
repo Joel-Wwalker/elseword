@@ -67,13 +67,14 @@ export class TextAudio {
     this._listeners = [];
     this._context = null;
     this._resumePromise = null;
+    this._resumeAttempt = 0;
     this._pending = null;
     this._timer = null;
     this._lastPlayed = -Infinity;
     this._destroyed = false;
 
     const gesture = event => {
-      if (event?.repeat || event?.target?.closest?.('[data-text-sound-toggle]')) return;
+      if (event?.repeat || event?.key === 'Escape' || event?.target?.closest?.('[data-text-sound-toggle]')) return;
       void this.unlock();
     };
     // Mouse presses activate immediately; touch and pen activate on release.
@@ -141,21 +142,25 @@ export class TextAudio {
       }
     }
     this._syncReady();
-    if (this.ready) { this._kickPending(); return true; }
-    if (this._resumePromise) return this._resumePromise;
+    const attempt = ++this._resumeAttempt;
+    if (this.ready) { this._resumePromise = null; this._kickPending(); return true; }
+    // A disallowed resume can stay pending indefinitely. Retry on the next
+    // gesture; an older request must not cancel or clear a newer attempt.
     // Only the latest pending burst survives; stop/mute remove it while resume awaits.
     this._resumePromise = (async () => {
       try {
         await this._context.resume();
+        if (attempt !== this._resumeAttempt) return false;
         this._syncReady();
         this._kickPending();
         return this.ready && this.enabled && !this._hidden();
       } catch {
+        if (attempt !== this._resumeAttempt) return false;
         this.stop();
         this._syncReady();
         return false;
       }
-    })().finally(() => { this._resumePromise = null; });
+    })().finally(() => { if (attempt === this._resumeAttempt) this._resumePromise = null; });
     return this._resumePromise;
   }
 

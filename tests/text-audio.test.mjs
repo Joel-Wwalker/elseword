@@ -163,6 +163,55 @@ test('click activation starts voices without requiring a preceding pointer event
   f.audio.destroy();
 });
 
+test('Escape does not start an audio request without browser activation', () => {
+  const f = fixture({ suspended: true });
+  f.document.dispatch('keydown', { key: 'Escape' });
+  assert.equal(f.contexts.length, 0);
+  f.document.dispatch('keydown', { key: 'Enter' });
+  assert.equal(f.contexts.length, 1);
+  f.audio.destroy();
+});
+
+test('a later gesture retries a pending resume and stale rejection cannot stop playback', async () => {
+  let rejectFirst;
+  const first = new Promise((resolve, reject) => { rejectFirst = reject; });
+  let attempts = 0;
+  const f = fixture({ suspended: true, resume: () => ++attempts === 1 ? first : undefined });
+  const oldRequest = f.audio.unlock();
+  f.document.dispatch('click');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(attempts, 2, 'A pending request must not swallow the next user gesture');
+  assert.equal(f.audio.ready, true);
+  f.audio.playText('abcdef');
+  assert.equal(f.outputs.length, 1);
+  rejectFirst(new Error('Old activation failed'));
+  await oldRequest;
+  assert.equal(f.outputs[0].source.stopped, false, 'An old request cannot cancel newly started voices');
+  f.advance(80);
+  assert.ok(f.outputs.length > 1);
+  f.audio.destroy();
+});
+
+test('mute and destruction cancel output while a retried resume is pending', async () => {
+  for (const reason of ['mute', 'destroy']) {
+    const resolvers = [];
+    const f = fixture({ suspended: true, resume: () => new Promise(resolve => resolvers.push(resolve)) });
+    const first = f.audio.unlock();
+    const second = f.audio.unlock();
+    assert.equal(resolvers.length, 2);
+    f.audio.playText('pending voices');
+    if (reason === 'mute') f.audio.setEnabled(false);
+    else f.audio.destroy();
+    resolvers[1]();
+    await second;
+    resolvers[0]();
+    await first;
+    f.advance(2000);
+    assert.equal(f.outputs.length, 0, reason);
+    f.audio.destroy();
+  }
+});
+
 test('touch release and click on a sound toggle leave activation to its handler', () => {
   const f = fixture();
   const target = { closest: () => ({}) };
