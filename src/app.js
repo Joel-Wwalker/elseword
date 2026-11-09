@@ -1,4 +1,4 @@
-import { verbForm, keyFor } from './sentence-grammar.js';
+import { sentenceChoices, canPluralizeObject } from './sentence-grammar.js';
 import { CORE_VOCAB, PRESETS, createLanguage, generateWord, regenerateLanguage, translateText, composeSentence, validateLanguage, exportCSV, generateNames, applySoundChange, renderWriting } from './engine.js';
 import { translateSentence } from './sentence-translator.js';
 import { restartVocabulary, regenerateGrammarMarkers } from './engine.js';
@@ -251,13 +251,14 @@ function rememberRulesDraft(target) {
 }
 function renderSentenceSelectors() {
   const lang=language();
-  const sets={subject:lang.words.filter(w=>['pronoun','noun'].includes(w.pos)),verb:lang.words.filter(w=>w.pos==='verb' && (verbForm(lang,w.english)?.root ?? keyFor(w.english))===keyFor(w.english)),object:lang.words.filter(w=>w.pos==='noun'),adjective:lang.words.filter(w=>w.pos==='adjective')};
+  const sets=sentenceChoices(lang);
   const defaults={subject:'i',verb:'see',object:'moon',adjective:'big'};
   for(const [kind,words] of Object.entries(sets)){
     const control=$(`sentence-${kind}`),previous=control.value;
     const optional=kind==='adjective'||kind==='object';
     const selected=control.dataset.initialized?previous:defaults[kind];
-    control.innerHTML=(optional?option('','None',selected===''):'')+words.map(w=>option(w.english,w.english,w.english===selected)).join('');
+    const retained=selected&&!words.some(w=>w.english===selected)?option(selected,`${selected} (saved choice)`,true):'';
+    control.innerHTML=(optional?option('','None',selected===''):'')+retained+words.map(w=>option(w.english,w.english,w.english===selected)).join('');
     if((optional&&previous==='')&&control.dataset.initialized)control.value='';
     control.dataset.initialized='true';
   }
@@ -265,6 +266,8 @@ function renderSentenceSelectors() {
 function sentenceOptions() {return {subject:$('sentence-subject').value,verb:$('sentence-verb').value,object:$('sentence-object').value,adjective:$('sentence-adjective').value,tense:$('sentence-tense').value,plural:$('sentence-plural').checked,negative:$('sentence-negative').checked,question:$('sentence-question').checked};}
 function renderSentence({sound=false}={}) {
   const lang=language();const result=composeSentence(sentenceOptions(),lang);sentenceText=renderWriting(result.text,lang);
+  $('sentence-plural').disabled=!canPluralizeObject(sentenceOptions(),lang);
+  $('sentence-plural').title='Applies to the noun in “To what”.';
   $('sentence-language-label').textContent=`${lang.name.toUpperCase()} · ${lang.grammar.order}`;
   $('sentence-result').textContent=sentenceText;$('sentence-result').dir=lang.script.direction;
   $('sentence-english').textContent=result.error||result.english;

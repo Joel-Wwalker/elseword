@@ -68,11 +68,11 @@ function templateScene(reference) {
 function normalizeBuilder(value, language) {
   const source = object(value ?? {}, 'Sentence options'), options = {};
   const ids = new Set(language.words.map(word => word.id));
-  const meanings = new Set(language.words.map(word => word.english));
+  const meanings = new Set(language.words.map(word => keyOf(word.english)));
   for (const key of ['subject', 'verb', 'object', 'adjective']) {
     const reference = text(source[key], `Sentence ${key}`, 80);
-    if (reference && !ids.has(reference) && !meanings.has(keyOf(reference))) throw new Error(`Sentence ${key} refers to a missing word.`);
-    options[key] = ids.has(reference) ? reference : keyOf(reference);
+    // Keep unresolved choices in portable drafts so they can be repaired in the editor.
+    options[key] = !ids.has(reference) && meanings.has(keyOf(reference)) ? keyOf(reference) : reference;
   }
   options.tense = oneOf(source.tense ?? 'present', ['present', 'past', 'future'], 'sentence tense');
   for (const key of ['plural', 'negative', 'question']) {
@@ -168,16 +168,24 @@ export function compileSceneProject(value) {
     const writtenPrefix = beat.mode === 'literal' ? prefix : renderWriting(prefix, project.language);
     const wordAt = word ? start + (points(writtenPrefix).length + 1) * TYPE_INTERVAL : speechEnd;
     const actionAt = beat.cue === 'start' ? start : beat.cue === 'end' ? speechEnd : wordAt;
-    const quiet = !text && !english;
+    const error = source.error ?? '';
+    const quiet = !error && !text && !english;
     const end = quiet ? start + Math.max(100, (beat.action === 'none' ? 0 : ACTION_DURATION) + beat.pauseMs)
       : Math.max(start + 1200, speechEnd + 900, start + points(english).length * 28 + 450, beat.action === 'none' ? start : actionAt + ACTION_DURATION) + beat.pauseMs;
     if (project.sound) characters.forEach((character, index) => {
       if (isAudibleCharacter(character)) audioEvents.push({ time: start + (index + 1) * TYPE_INTERVAL, voice: project.cast[beat.speaker], character });
     });
     cursor = end;
-    return { ...beat, text, english, romanized: source.text, start, end, speechEnd, actionAt, characters };
+    return { ...beat, text, english, error, quiet, romanized: source.text, start, end, speechEnd, actionAt, characters };
   });
-  return { project, beats, duration: cursor, audioEvents };
+  const errors = beats.flatMap((beat, index) => beat.error ? [{ beatId: beat.id, line: index + 1, message: beat.error }] : []);
+  return { project, beats, duration: cursor, audioEvents, errors };
+}
+
+/** Drafts can be saved with unfinished lines, but cannot be played or recorded. */
+export function assertScenePlayable(compiled) {
+  const error = compiled.errors[0];
+  if (error) throw new Error(`Line ${error.line}: ${error.message}`);
 }
 
 const PROP_GEOMETRY = {

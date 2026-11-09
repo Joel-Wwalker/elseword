@@ -58,7 +58,7 @@ test('malformed scene imports reject unsafe trees, invalid actors, references an
     { beats: [literal('x'), literal('x')] }, { beats: [literal('a', 'x'.repeat(301))] },
     { beats: [literal('a', '', { pauseMs: 5001 })] }, { beats: [literal('a', '', { wordIndex: 300 })] },
     { beats: [literal('a', '', { speaker: 2 })] }, { beats: [literal('a', '', { action: 'fall' })] },
-    { beats: [{ ...literal('a'), mode: 'builder', options: { subject: 'missing' } }] },
+    { beats: [{ ...literal('a'), mode: 'builder', options: { subject: { invalid: 'reference' } } }] },
   ]) assert.throws(() => validate({ ...project, ...update }), undefined, JSON.stringify(update));
   assert.throws(() => validate('{"__proto__":{}}'), /unsafe|key/i);
   const getter = { ...project }; Object.defineProperty(getter, 'name', { enumerable: true, get() { throw new Error('executed getter'); } });

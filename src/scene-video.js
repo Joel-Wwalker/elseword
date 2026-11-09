@@ -1,4 +1,4 @@
-import { compileSceneProject, validateSceneProject } from './scene-project.js';
+import { compileSceneProject, validateSceneProject, assertScenePlayable } from './scene-project.js';
 import { makeBlipSamples } from './text-audio.js';
 
 export function selectRecordingFormat(Recorder) {
@@ -18,6 +18,7 @@ export function createVideoExporter(environment = globalThis, { createRenderer: 
   return async function exportVideo(value, {canvas,renderer,onProgress=()=>{},signal}={}) {
     const project=validateSceneProject(value);
     const compiled=compileSceneProject(project);
+    assertScenePlayable(compiled);
     if (compiled.duration>60_000) throw new Error('Video exports can be up to 60 seconds. Shorten the dialogue or pauses, or split this into two scenes.');
     if (signal?.aborted) throw aborted();
     const doc=environment.document;

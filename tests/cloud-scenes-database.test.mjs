@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { createLanguage } from '../src/engine.js';
-import { createSceneProject, validateSceneProject } from '../src/scene-project.js';
+import { createSceneProject, validateSceneProject, compileSceneProject } from '../src/scene-project.js';
 import { SCENES, getSceneEpisode } from '../src/scenes.js';
 
 let db;
@@ -29,7 +29,7 @@ before(async () => {
     grant execute on function auth.uid() to anon,authenticated;
     insert into auth.users values ('${alice}'),('${bob}'),('${charlie}');
   `);
-  for (const name of ['202611070001_cloud_languages.sql', '202611080001_language_tools.sql', '202611080002_cloud_scenes.sql']) {
+  for (const name of ['202611070001_cloud_languages.sql', '202611080001_language_tools.sql', '202611080002_cloud_scenes.sql', '202611090002_scene_draft_references.sql']) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
   }
 });
@@ -94,6 +94,20 @@ test('canonical builder, literal and every built-in template branch round-trip t
     assert.deepEqual(saved.document, document, `${document.room}/${document.name}`);
     assert.deepEqual(validateSceneProject(saved.document), document);
   }
+});
+
+test('cloud saves preserve missing-reference drafts for repair without treating them as playable', async () => {
+  await asUser(alice);
+  const document = createSceneProject(createLanguage());
+  document.beats[0].options.object = 'Removed-Word-ID';
+  const saved = await save({ document });
+  assert.equal(saved.document.beats[0].options.object, 'Removed-Word-ID');
+  const restored = validateSceneProject(saved.document);
+  assert.equal(restored.beats[0].options.object, 'Removed-Word-ID');
+  assert.match(compileSceneProject(restored).beats[0].error, /dictionary/i);
+  restored.beats[0].options.object = 'moon';
+  const repaired = await save({ id: saved.id, document: restored, version: saved.version });
+  assert.deepEqual(compileSceneProject(repaired.document).errors, []);
 });
 
 test('scene writes retain owner isolation and reject direct writes and anonymous access', async () => {
@@ -204,7 +218,9 @@ test('scene builder options and template references use typed bounded known fiel
   for (const mutate of [
     d => { delete d.beats[0].options; },
     d => { d.beats[0].options = []; },
-    d => { d.beats[0].options.subject = 'missing'; },
+    d => { d.beats[0].options.subject = 'x'.repeat(81); },
+    d => { d.beats[0].options.object = { missing: 'reference' }; },
+    d => { d.beats[0].options.object = 'bad\u0001reference'; },
     d => { d.beats[0].options.verb = 1; },
     d => { d.beats[0].options.tense = 'today'; },
     d => { d.beats[0].options.question = 'false'; },

@@ -13,6 +13,21 @@ const OPTIONAL_OBJECT = new Set(['eat', 'drink', ...SWEAR_VERBS]);
 const DIRECTIONAL_HOME = new Set(['go', 'come', 'walk', 'run']);
 const MASS_OR_TIME = new Set('bread water tea coffee milk soup rice fruit cheese fish salt sugar sleep rain time work today tomorrow yesterday morning night day home'.split(' '));
 const capitalize = text => text ? [...text][0].toLocaleUpperCase('en-US') + text.slice([...text][0].length) : '';
+const SLOT_TYPES = { subject: ['noun', 'pronoun'], verb: ['verb'], object: ['noun', 'pronoun'], adjective: ['adjective'] };
+const OBJECT_CASE = new Map([['i', 'me'], ['he', 'him'], ['she', 'her'], ['we', 'us'], ['they', 'them']]);
+const selectionEntry = (language, value) => (language?.words ?? []).find(word => word.id === value) ?? entryFor(language, value);
+
+/** Both editors offer the same dictionary roles; old selections are validated separately. */
+export function sentenceChoices(language) {
+  return Object.fromEntries(Object.entries(SLOT_TYPES).map(([slot, types]) => [slot,
+    (language?.words ?? []).filter(word => types.includes(word.pos) && (slot !== 'verb' ||
+      (verbForm(language, word.english)?.root ?? keyFor(word.english)) === keyFor(word.english))),
+  ]));
+}
+
+export function canPluralizeObject(options, language) {
+  return Boolean(options.object && selectionEntry(language, options.object)?.pos === 'noun');
+}
 
 export function verbForm(language, surface) {
   const word = keyFor(surface), known = candidate => entryFor(language, candidate)?.pos === 'verb' || SWEAR_VERBS.has(candidate);
@@ -73,12 +88,20 @@ export function clauseError({ verb, object }) {
 }
 
 export function clauseFromSelections(options, language) {
-  const source = value => keyFor((language?.words ?? []).find(word => word.id === value)?.english ?? value);
+  for (const [slot, types] of Object.entries(SLOT_TYPES)) {
+    if (!options[slot]) continue;
+    const entry = selectionEntry(language, options[slot]) ?? (['subject', 'object'].includes(slot)
+      ? entryFor(language, knownNounForm(language, options[slot])?.root) : null);
+    if (!entry) throw new Error(`The ${slot} word “${options[slot]}” is no longer in this dictionary. Choose another word.`);
+    if (!types.includes(entry.pos)) throw new Error(`Choose ${slot === 'adjective' ? 'an adjective' : slot === 'verb' ? 'a verb' : 'a noun or pronoun'} for the ${slot}. “${entry.english}” is listed as ${entry.pos}.`);
+  }
+  const source = value => keyFor(selectionEntry(language, value)?.english ?? value);
   const subjectKey = source(options.subject), verbKey = source(options.verb), objectKey = source(options.object), modifier = source(options.adjective);
   if (!subjectKey || !verbKey) throw new Error('Choose a subject and a verb.');
   const verb = verbForm(language, verbKey)?.root ?? verbKey;
+  if (objectKey && modifier && selectionEntry(language, options.object)?.pos === 'pronoun') throw new Error('Use a description with a noun object, or leave the object empty after “be”.');
   const nounPart = (surface, subject = false) => {
-    if (PRONOUNS.has(surface)) return { root: surface, pronoun: true };
+    if (PRONOUNS.has(surface) || entryFor(language, surface)?.pos === 'pronoun') return { root: surface, pronoun: true };
     const form = knownNounForm(language, surface) ?? { root: surface, surface, plural: false };
     const plural = form.plural || (!subject && Boolean(options.plural));
     return { ...form, plural, article: plural || MASS_OR_TIME.has(form.root) ? '' : subject ? 'the' : 'a' };
@@ -100,12 +123,12 @@ export function clauseSyntax(clause) {
 }
 
 export function englishSentence(clause) {
-  const phrase = part => {
+  const phrase = (part, object = false) => {
     if (!part) return '';
-    if (part.pronoun) return part.root === 'i' ? 'I' : part.root;
+    if (part.pronoun) return object ? OBJECT_CASE.get(part.root) ?? part.root : part.root === 'i' ? 'I' : part.root;
     if (part.adjectiveOnly) return part.root;
     const body = [part.modifier, part.plural ? englishPlural(part.root) : part.root].filter(Boolean).join(' ');
-    const article = part.article === 'a' && /^[aeiou]/i.test(body) ? 'an' : part.article;
+    const article = part.article === 'a' && /^(?:[aeiou]|hour|honest|honou?r|heir)/i.test(body) ? 'an' : part.article;
     return [article, body].filter(Boolean).join(' ');
   };
   const { subject, verb, tense, negative, question } = clause;
@@ -119,7 +142,7 @@ export function englishSentence(clause) {
   } else if (negative || question) auxiliary = tense === 'past' ? 'did' : thirdPerson ? 'does' : 'do';
   else if (tense === 'past') inflected = ENGLISH_PAST[verb] ?? (verb.endsWith('e') ? verb + 'd' : /[^aeiou]y$/.test(verb) ? verb.slice(0, -1) + 'ied' : verb + 'ed');
   else if (thirdPerson) inflected = ({ have: 'has', do: 'does', go: 'goes' })[verb] ?? englishPlural(verb);
-  const tail = [negative ? 'not' : '', inflected, phrase(clause.object)];
+  const tail = [negative ? 'not' : '', inflected, phrase(clause.object, true)];
   const parts = question && auxiliary ? [auxiliary, phrase(subject), ...tail] : [phrase(subject), auxiliary, ...tail];
   return capitalize(parts.filter(Boolean).join(' ')) + (question ? '?' : '.');
 }
