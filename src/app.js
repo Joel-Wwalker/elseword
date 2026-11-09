@@ -12,6 +12,8 @@ import { createCloudService } from './cloud-service.js';
 import { CloudLibrary } from './cloud-library.js';
 import { mountCloudUI } from './cloud-ui.js';
 import { mountLanguageTools, updateWordDetails, serializePortableLanguage } from './language-ui.js';
+import { createViewNavigation } from './studio-navigation.js';
+import { starterExampleName, validateRulesEdit } from './studio-usability.js';
 
 const $ = id => document.getElementById(id);
 const escapeHTML = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -49,6 +51,9 @@ let history = [], view = 'world', sceneId = 'bakery', castOverrides = {}, episod
 let sentenceText = '', glossText = '', toastTimer, resumeAfterDialog = false, focusDialogueAfterDialog = false;
 let sceneMaker, makerLoading, makerOpen=false, makerEpoch=0;
 let sceneCollapsed=false, resumeAfterCollapse=false;
+let changingView=false, nextMakerRemix=false, rulesFormLanguageId=null, soundDraft=null, grammarDraft={};
+const rulesErrors={sounds:{},grammar:{}};
+const navigation=createViewNavigation({history:window.history,location:window.location,render:renderView});
 try { sceneCollapsed=storage.getItem(SCENE_HIDDEN_KEY)==='true'; } catch { /* Display preferences are optional when storage is blocked. */ }
 const worldPreviewAvailable=()=>view==='world'&&!makerOpen&&!sceneCollapsed&&!$('studio-dialog').open;
 function renderSceneVisibility(){
@@ -78,22 +83,25 @@ function commit(next, message, {render=true}={}) {
 }
 function option(value,label,selected=false) {return `<option value="${escapeHTML(value)}"${selected?' selected':''}>${escapeHTML(label)}</option>`;}
 function sprite(character,extra='') {return `<span class="sprite-portrait ${extra}" role="img" aria-label="${escapeHTML(character.name)}" style="background-image:url('${character.atlas}');background-position:0 ${character.row*100}%"></span>`;}
-function showView(next) {
+function showView(next, options) { navigation.go(next,options); }
+function renderView(next) {
   textAudio.stop();
-  if(next==='editor') { if(!makerOpen){showView('world');void openMaker();} return; }
+  if(next==='editor') { if(!makerOpen){const remix=nextMakerRemix;nextMakerRemix=false;renderView('world');void openMaker(remix);} return; }
   if(!['world','words','rules','writing'].includes(next))next='world'; view=next;
   makerEpoch++;
-  if(makerOpen)sceneMaker?.close();
+  if(makerOpen){changingView=true;try{sceneMaker?.close();}finally{changingView=false;}}
   document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==`view-${next}`);
   document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view===next); if(el.dataset.view===next)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
   if(worldPreviewAvailable()){if(!matchMedia('(prefers-reduced-motion: reduce)').matches)player?.play();}else player?.pause();
   if(next==='words')renderDictionary(); if(next==='rules')renderRules();if(next==='writing')renderWritingPanel();
-  window.history.replaceState(null,'',`#${next}`);
 }
 function renderSummary() {
   const lang=language();
   $('language-switch').innerHTML=project.languages.map(item=>option(item.id,item.name,item.id===lang.id)).join('');
   $('world-language-name').value=lang.name;
+  const example=starterExampleName(lang);
+  $('starter-example').hidden=!example;
+  $('starter-example').textContent=example?`${example} is a starting example. Edit it or create a new language.`:'';
   $('word-count').textContent=`${lang.words.length} words`;
   $('language-sound').textContent=`${lang.grammar.order} · ${PRESETS.find(p=>p.id===lang.preset)?.name??'Custom'} sounds`;
   $('dictionary-language-heading').textContent=lang.name.toUpperCase();
@@ -148,6 +156,8 @@ function setWord(id,value) {
 }
 function renderRules() {
   const lang=language();
+  if(rulesFormLanguageId!==lang.id){soundDraft=null;grammarDraft={};rulesErrors.sounds={};rulesErrors.grammar={};rulesFormLanguageId=lang.id;}
+  if(soundDraft&&soundDraft.base!==JSON.stringify({sounds:lang.sounds,seed:lang.seed})){soundDraft=null;rulesErrors.sounds={};}
   $('preset-grid').innerHTML=PRESETS.map((p,i)=>`<button class="preset-card" data-preset="${p.id}" aria-pressed="${lang.preset===p.id}"><span class="preset-mark">${['~','⌁','≋','⋇'][i]}</span><strong>${p.name}</strong><small>${['Gentle & flowing','Short & sharp','Warm & grounded','A little unfamiliar'][i]}</small></button>`).join('');
   $('sound-preview').innerHTML=Array.from({length:5},(_,i)=>`<span>${escapeHTML(generateWord(lang,`preview-${i}`,lang.revision))}</span>`).join('');
   $('consonants').value=lang.sounds.consonants.join(' ');$('vowels').value=lang.sounds.vowels.join(' ');$('min-syllables').value=lang.sounds.minSyllables;$('max-syllables').value=lang.sounds.maxSyllables;$('language-seed').value=lang.seed;
@@ -159,10 +169,40 @@ function renderRules() {
   const example=composeSentence({subject:'i',verb:'see',object:'moon',adjective:'big'},lang);
   $('grammar-example').textContent=renderWriting(example.text,lang);$('grammar-example').dir=lang.script.direction;
   $('grammar-tokens').innerHTML=Array.from(lang.grammar.order).map(slot=>`<span class="token">${escapeHTML(({S:byEnglish('i')?.word,V:byEnglish('see')?.word,O:[byEnglish('big')?.word,byEnglish('moon')?.word][lang.grammar.adjective==='before'?'slice':'reverse']().join(' ')})[slot]??'…')}<small>${({S:'WHO',V:'ACTION',O:'WHAT'})[slot]}</small></span>`).join('');
+  if(soundDraft){for(const [id,value] of Object.entries(soundDraft.fields))$(id).value=value;document.querySelectorAll('.pattern-options input').forEach(input=>input.checked=soundDraft.patterns.includes(input.value));}
+  for(const [id,draft] of Object.entries(grammarDraft)){if(lang.grammar[draft.key]===draft.base)$(id).value=draft.value;else{delete grammarDraft[id];delete rulesErrors.grammar[id];}}
+  displayRulesErrors('sounds',rulesErrors.sounds);displayRulesErrors('grammar',rulesErrors.grammar);
+}
+const rulesFields={sounds:['consonants','vowels','patterns','min-syllables','max-syllables','language-seed'],grammar:['word-order','adjective-order','grammar-plural','grammar-past','grammar-future','grammar-negative','grammar-question']};
+function displayRulesErrors(group, errors, {focus=false}={}) {
+  const summary=$(`${group}-error`), messages=Object.values(errors);
+  summary.textContent=messages.length?`${group==='sounds'?'Sound settings':'Grammar'} not saved. ${errors[group]??'Check the highlighted field.'}`:'';
+  summary.hidden=!messages.length;
+  let first;
+  for(const id of rulesFields[group]){
+    const control=id==='patterns'?$('syllable-patterns'):$(id), errorId=`${id}-error`;
+    let note=$(errorId);
+    if(!note){note=document.createElement('span');note.id=errorId;note.className='field-error';note.hidden=true;const label=control.closest('label');if(label)label.append(note);else if(id==='patterns')control.append(note);else control.after(note);}
+    const message=errors[id];note.textContent=message??'';note.hidden=!message;
+    const descriptions=(control.getAttribute('aria-describedby')??'').split(/\s+/).filter(value=>value&&value!==errorId);
+    if(message){control.setAttribute('aria-invalid','true');descriptions.push(errorId);first??=control;}else control.removeAttribute('aria-invalid');
+    if(descriptions.length)control.setAttribute('aria-describedby',descriptions.join(' '));else control.removeAttribute('aria-describedby');
+  }
+  if(focus&&messages.length){const target=first??summary;target.closest('details')?.setAttribute('open','');(target.querySelector('input')??target).focus();}
 }
 function applySounds() {
   const next=clone(language());next.sounds={...next.sounds,consonants:$('consonants').value.trim().split(/\s+/).filter(Boolean),vowels:$('vowels').value.trim().split(/\s+/).filter(Boolean),patterns:[...document.querySelectorAll('.pattern-options input:checked')].map(input=>input.value),minSyllables:Number($('min-syllables').value),maxSyllables:Number($('max-syllables').value)};next.seed=$('language-seed').value.trim();
-  if(commit(next,'Sound settings saved. Generate vocabulary when you’re ready.'))playGenerated($('sound-preview').textContent);
+  const result=validateRulesEdit(language(),{sounds:next.sounds,seed:next.seed});rulesErrors.sounds=result.errors;
+  if(!result.language){soundDraft={base:JSON.stringify({sounds:language().sounds,seed:language().seed}),fields:Object.fromEntries(rulesFields.sounds.filter(id=>id!=='patterns').map(id=>[id,$(id).value])),patterns:next.sounds.patterns};displayRulesErrors('sounds',result.errors,{focus:true});return;}
+  soundDraft=null;displayRulesErrors('sounds',{});
+  if(commit(result.language,'Sound settings saved. Generate vocabulary when you’re ready.'))playGenerated($('sound-preview').textContent);
+}
+function rememberRulesDraft(target) {
+  if(soundDraft){
+    if(Object.hasOwn(soundDraft.fields,target.id))soundDraft.fields[target.id]=target.value;
+    if(target.closest?.('#syllable-patterns'))soundDraft.patterns=[...document.querySelectorAll('.pattern-options input:checked')].map(input=>input.value);
+  }
+  if(Object.hasOwn(grammarDraft,target.id))grammarDraft[target.id].value=target.value;
 }
 function renderSentenceSelectors() {
   const lang=language();
@@ -342,10 +382,12 @@ document.addEventListener('click',event=>{
 });
 document.addEventListener('change',event=>{
   const target=event.target;
+  rememberRulesDraft(target);
   if(target.dataset.contextWord)setWord(target.dataset.contextWord,target.value);
   if(target.dataset.dictionaryWord)setWord(target.dataset.dictionaryWord,target.value);
   if(target.dataset.glyph){const next=clone(language());next.script=applyWritingPreset(next.script,'custom');const value=target.value.trim();if(value)next.script.glyphs[target.dataset.glyph]=value;else delete next.script.glyphs[target.dataset.glyph];if(commit(next))playGenerated(sentenceText);}
 });
+document.addEventListener('input',event=>rememberRulesDraft(event.target));
 $('language-switch').onchange=event=>{project.activeId=event.target.value;page=0;save();renderAll();};
 $('new-language').onclick=newLanguageDialog;
 $('project-menu').onclick=projectDialog;
@@ -358,7 +400,13 @@ $('export-csv').onclick=()=>download(exportCSV(language()),`${filename()}-dictio
 $('generate-names').onclick=()=>{namesRoll++;renderNames({sound:true});};$('name-kind').onchange=()=>renderNames({sound:true});
 $('apply-sounds').onclick=applySounds;
 $('regenerate').onclick=()=>{try{if(commit(regenerateLanguage(language()),'Vocabulary generated. Kept words are unchanged.'))playGenerated($('sound-preview').textContent);}catch(error){notify(error.message);}};
-for(const [id,key] of [['word-order','order'],['adjective-order','adjective'],...['plural','past','future','negative','question'].map(key=>[`grammar-${key}`,key])])$(id).onchange=event=>{const next=clone(language());next.grammar[key]=event.target.value.trim();if(commit(next))playGenerated($('grammar-example').textContent);};
+for(const [id,key] of [['word-order','order'],['adjective-order','adjective'],...['plural','past','future','negative','question'].map(key=>[`grammar-${key}`,key])])$(id).onchange=event=>{
+  const value=event.target.value.trim(),result=validateRulesEdit(language(),{grammar:{...language().grammar,[key]:value}},id);
+  delete rulesErrors.grammar[id];
+  if(!result.language){Object.assign(rulesErrors.grammar,result.errors);grammarDraft[id]={key,value: event.target.value,base:language().grammar[key]};displayRulesErrors('grammar',rulesErrors.grammar,{focus:true});return;}
+  delete grammarDraft[id];displayRulesErrors('grammar',rulesErrors.grammar);
+  if(commit(result.language))playGenerated($('grammar-example').textContent);
+};
 $('apply-change').onclick=()=>{try{if(commit(applySoundChange(language(),$('sound-from').value,$('sound-to').value),'Sound change applied. Undo is available.'))playGenerated($('sound-preview').textContent);}catch(error){notify(error.message);}};
 for(const key of ['subject','verb','object','adjective','tense','plural','negative','question'])$(`sentence-${key}`).onchange=()=>renderSentence({sound:true});
 $('script-style').onchange=event=>{const next=clone(language()), presetId=event.target.value;next.script=applyWritingPreset(next.script,presetId);if(commit(next)){playGenerated(sentenceText);if(presetId==='custom'){$('alphabet-editor').open=true;$('glyph-editor').querySelector('input')?.focus();}}};$('script-direction').onchange=event=>{const next=clone(language());next.script.direction=event.target.value;if(commit(next))playGenerated(sentenceText);};
@@ -370,7 +418,7 @@ $('import-file').onchange=async event=>{
 };
 $('studio-dialog').addEventListener('click',event=>{if(event.target===$('studio-dialog')){const r=$('studio-dialog').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)closeDialog();}});
 $('studio-dialog').addEventListener('close',()=>{textAudio.stop();if(resumeAfterDialog&&worldPreviewAvailable())player?.play();resumeAfterDialog=false;if(focusDialogueAfterDialog){if(worldPreviewAvailable())document.querySelector('.scene-next')?.focus();focusDialogueAfterDialog=false;}});
-window.addEventListener('hashchange',()=>showView(location.hash.slice(1)));
+window.addEventListener('hashchange',()=>navigation.restore());
 renderSceneVisibility();
 renderAll();
 player=new ScenePlayer($('player-host'),{getLanguage:language,onLine:()=>{},onEnd:()=>{},onEpisodeChange:episodeChanged,onWordSelect:sceneWordDialog,textAudio});
@@ -385,19 +433,19 @@ $('toggle-scene-window').onclick=()=>{
 };
 const cloudService=createCloudService(CLOUD_CONFIG);
 const cloudLibrary=new CloudLibrary({service:cloudService,storage});
-function closeMakerView(){
+function closeMakerView(navigate=true){
   makerOpen=false;$('scene-maker-host').hidden=true;$('world-browser').hidden=false;document.querySelector('.maker-entry').hidden=false;
   document.querySelector('.shell').classList.remove('editing-scene');
   $('view-world').querySelector('.page-heading').hidden=false;
   if(worldPreviewAvailable()&&!matchMedia('(prefers-reduced-motion: reduce)').matches)player?.play();
-  if(view==='world')$('make-scene').focus();
-  if(view==='world'){
+  if(view==='world'&&!changingView&&navigate)$('make-scene').focus();
+  if(view==='world'&&!changingView){
     document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view==='world');if(el.dataset.view==='world')el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
-    window.history.replaceState(null,'','#world');
+    if(navigate)showView('world');
   }
 }
 async function openMaker(remix=false){
-  if(remix&&currentScene().choice&&!player.choiceId){notify('Choose a reply before editing this conversation.');return;}
+  if(remix&&currentScene().choice&&!player.choiceId){notify('Choose a reply before editing this conversation.');showView('world',{replace:true});return;}
   const epoch=++makerEpoch, languageId=language().id;
   const options=remix?{room:sceneId,episodeId:episodeSelections[sceneId]??'original',choiceId:player.choiceId}:{room:sceneId};
   $('make-scene').disabled=true;$('remix-scene').disabled=true;$('scene-editor-tab').disabled=true;$('scene-editor-tab').textContent='Opening editor…';
@@ -407,17 +455,18 @@ async function openMaker(remix=false){
       return mountSceneMaker({host:$('scene-maker-host'),getLanguage:language,notify,cloudService:cloudService.forScenes(validateSceneProject),onClose:closeMakerView});
     }).catch(error=>{makerLoading=null;throw error;});
     sceneMaker=await makerLoading;
-    if(epoch!==makerEpoch||view!=='world'||language().id!==languageId)return;
+    if(epoch!==makerEpoch||view!=='world')return;
+    if(language().id!==languageId){showView('world',{replace:true});return;}
     player.pause();textAudio.stop();makerOpen=true;$('scene-maker-host').hidden=false;$('world-browser').hidden=true;document.querySelector('.maker-entry').hidden=true;
     document.querySelector('.shell').classList.add('editing-scene');
     $('view-world').querySelector('.page-heading').hidden=true;
     await sceneMaker.open(options);
+    if(epoch!==makerEpoch||view!=='world'||!makerOpen)return;
     document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view==='editor');if(el.dataset.view==='editor')el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
-    window.history.replaceState(null,'','#editor');
-  }catch(error){closeMakerView();notify(error.message);}
+  }catch(error){if(epoch===makerEpoch){closeMakerView(false);showView('world',{replace:true});notify(error.message);}}
   finally{$('make-scene').disabled=false;$('remix-scene').disabled=false;$('scene-editor-tab').disabled=false;$('scene-editor-tab').textContent='Scene editor';}
 }
-$('make-scene').onclick=()=>void openMaker();$('remix-scene').onclick=()=>void openMaker(true);
+$('make-scene').onclick=()=>showView('editor');$('remix-scene').onclick=()=>{nextMakerRemix=true;showView('editor');};
 cloudUI=mountCloudUI({library:cloudLibrary,service:cloudService,button:$('account-button'),getLanguage:language,openDialog,closeDialog,notify,
   openLocalCopy:document=>{
     if(project.languages.length>=50)throw new Error('This device already has 50 languages. Export and remove one before opening another.');
@@ -427,6 +476,6 @@ cloudUI=mountCloudUI({library:cloudLibrary,service:cloudService,button:$('accoun
 });
 void cloudLibrary.start();
 languageTools=mountLanguageTools({getLanguage:language,commit,openDialog,closeDialog,notify,playGenerated});
-showView(location.hash.slice(1)||'world');
+navigation.restore();
 if(project.warning){$('save-status').textContent='Saved data needs attention';$('save-status').classList.add('error');notify(project.warning);}
 else if(vocabularyUpdated)save();
