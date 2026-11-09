@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2f6f3">
+  <meta name="description" content="How Oddtongue handles browser data, accounts, cloud saves, and exports.">
+  <title>Privacy | Oddtongue</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%234f6859' fill-rule='evenodd' d='M8 4h16v4h4v16h-4v4H8v-4H4V8h4zM10 10v12h12V10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="../interface.css">
+  <link rel="stylesheet" href="../ribbon.css">
+  <link rel="stylesheet" href="../heading-type.css">
+  <link rel="stylesheet" href="./privacy.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to privacy notice</a>
+  <div class="shell privacy-shell">
+    <header class="topbar">
+      <a class="brand" href="../" aria-label="Oddtongue home"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M8 4h16v4h4v16h-4v4H8v-4H4V8h4zM10 10v12h12V10z"/></svg>oddtongue</a>
+      <a class="privacy-back" href="../">Back to studio</a>
+    </header>
+    <main id="main" class="privacy-content" tabindex="-1">
+      <div class="page-heading">
+        <div><h1>Privacy</h1><p>Last updated <time datetime="2026-11-08">November 8, 2026</time></p></div>
+      </div>
+      <p>Oddtongue lets you create languages and animated scenes. You can use the editor without an account. An optional account lets you save copies online and open them on other devices.</p>
+
+      <section aria-labelledby="browser-data">
+        <h2 id="browser-data">Work saved in your browser</h2>
+        <p>The editor stores your languages, scene drafts, saved scenes, and preferences in your browser. This includes words, grammar, alphabets, saved phrases, dialogue, and scene settings. Browser storage can also contain recovery copies and snapshots used to track changes to cloud saves.</p>
+        <p>Signing out does not remove your local work. You can remove individual local projects through the editor or clear this website's data in your browser settings. Clearing site data also removes stored sign-in information and preferences. It does not remove cloud copies or files you already downloaded.</p>
+      </section>
+
+      <section aria-labelledby="accounts">
+        <h2 id="accounts">Accounts and sign-in</h2>
+        <p>Supabase handles accounts and sign-in. Email sign-in uses your email address to send a login link. If you choose Google, Google shares basic identity information with Supabase, such as your account identifier, email address, name, and profile picture. Oddtongue uses your account identifier and email address for your cloud library. Sign-in information stored in your browser keeps your session available between visits.</p>
+        <p>Resend delivers sign-in emails. It processes the recipient address, message content, and delivery information to send these emails. The email provider does not receive your language or scene documents as part of the sign-in email.</p>
+      </section>
+
+      <section aria-labelledby="cloud-copies">
+        <h2 id="cloud-copies">Cloud copies</h2>
+        <p>Choosing Save online sends a copy of the current language or scene to Supabase. A scene includes its dialogue, characters, timing, settings, and a snapshot of the language it uses. Any personal information you put in that content is part of the saved copy.</p>
+        <p>Cloud records include your account identifier, a record identifier, a version number, and update information. The app uses these to load your copies and detect conflicting saves. The cloud library restricts signed-in users to their own records. Signing in does not automatically upload all the projects on your device.</p>
+      </section>
+
+      <section aria-labelledby="exports">
+        <h2 id="exports">Downloads and video</h2>
+        <p>The browser creates language backups, dictionary files, printable references, scene files, and exported videos. Video export records the rendered animation and generated sound in the browser. These export actions create local files; they do not upload the exported files through Oddtongue. Files you choose to share elsewhere are handled by the destination you select.</p>
+      </section>
+
+      <section aria-labelledby="removing-data">
+        <h2 id="removing-data">Removing data</h2>
+        <p>Removing a cloud copy clears its language or scene content from the active database record. A deletion record remains with its identifiers, version, change identifier, and timestamps so an older device cannot silently restore the removed copy. Local copies, separate scene snapshots, and downloaded files are independent.</p>
+        <p>Removing a cloud copy does not delete your account. There is currently no delete-account button in the editor. Contact <a href="mailto:support@oddtongue.com">support@oddtongue.com</a> to request account deletion. Permanently removing your account from Supabase's authentication system also removes its linked language and scene records from the active database. This does not erase files or browser data on your devices. Infrastructure logs and backups are separate from these app records.</p>
+      </section>
+
+      <section aria-labelledby="providers">
+        <h2 id="providers">Hosting and service providers</h2>
+        <p>OpenAI Sites and Cloudflare host and deliver the website. They process connection and request information needed to serve it, such as IP addresses, requested URLs, and browser information. Supabase handles authentication and cloud database requests; Google handles Google sign-in; Resend delivers sign-in emails. These services have their own data-handling terms and policies.</p>
+      </section>
+
+      <section aria-labelledby="contact">
+        <h2 id="contact">Contact</h2>
+        <p>For privacy questions or account deletion requests, contact <a href="mailto:support@oddtongue.com">support@oddtongue.com</a>.</p>
+        <p>Cloudflare Email Routing forwards your email address and message content to a Gmail inbox so we can respond to your request.</p>
+      </section>
+    </main>
+    <footer class="footer"><div class="footer-links"><span>Oddtongue</span><a href="../">Back to studio</a><a href="../terms/">Terms</a></div></footer>
+  </div>
+</body>
+</html>
