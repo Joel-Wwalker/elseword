@@ -106,8 +106,7 @@ function renderSummary() {
   $('language-switch').innerHTML=project.languages.map(item=>option(item.id,item.name,item.id===lang.id)).join('');
   $('world-language-name').value=lang.name;
   const example=starterExampleName(lang);
-  $('starter-example').hidden=!example;
-  $('starter-example').textContent=example?`${example} is a starting example. Edit it or create a new language.`:'';
+  $('starter-example').textContent=example?`Start with ${example}, or make your own.`:'Make a language. Try it in a scene.';
   $('word-count').textContent=`${lang.words.length} words`;
   $('language-sound').textContent=`${lang.grammar.order} · ${PRESETS.find(p=>p.id===lang.preset)?.name??'Custom'} sounds`;
   $('dictionary-language-heading').textContent=lang.name.toUpperCase();
@@ -474,6 +473,10 @@ window.addEventListener('hashchange',()=>navigation.restore());
 renderSceneVisibility();
 renderAll();
 player=new ScenePlayer($('player-host'),{getLanguage:language,onLine:()=>{},onEnd:()=>{},onEpisodeChange:episodeChanged,onWordSelect:sceneWordDialog,textAudio});
+// Keep the location and playback status beside the persistent hide/show control.
+const sceneToolbar=$('player-host').querySelector('.scene-toolbar');
+$('world-scene-toolbar').prepend(...sceneToolbar.childNodes);
+sceneToolbar.remove();
 player.setScene(sceneId,currentCast());
 if(sceneCollapsed){resumeAfterCollapse=!player.paused;player.pause();}
 $('toggle-scene-window').onclick=()=>{
@@ -486,11 +489,11 @@ $('toggle-scene-window').onclick=()=>{
 const cloudService=createCloudService(CLOUD_CONFIG);
 const cloudLibrary=new CloudLibrary({service:cloudService,storage});
 function closeMakerView(navigate=true){
-  makerOpen=false;$('scene-maker-host').hidden=true;$('world-browser').hidden=false;document.querySelector('.maker-entry').hidden=false;
+  makerOpen=false;$('scene-maker-host').hidden=true;$('world-browser').hidden=false;
   document.querySelector('.shell').classList.remove('editing-scene');
   $('view-world').querySelector('.page-heading').hidden=false;
   if(worldPreviewAvailable()&&!matchMedia('(prefers-reduced-motion: reduce)').matches)player?.play();
-  if(view==='world'&&!changingView&&navigate)$('make-scene').focus();
+  if(view==='world'&&!changingView&&navigate)$('scene-editor-tab').focus();
   if(view==='world'&&!changingView){
     document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view==='world');if(el.dataset.view==='world')el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
     if(navigate)showView('world');
@@ -500,7 +503,7 @@ async function openMaker(remix=false){
   if(remix&&currentScene().choice&&!player.choiceId){notify('Choose a reply before editing this conversation.');showView('world',{replace:true});return;}
   const epoch=++makerEpoch, languageId=language().id;
   const options=remix?{room:sceneId,episodeId:episodeSelections[sceneId]??'original',choiceId:player.choiceId}:{room:sceneId};
-  $('make-scene').disabled=true;$('remix-scene').disabled=true;$('scene-editor-tab').disabled=true;$('scene-editor-tab').textContent='Opening editor…';
+  $('remix-scene').disabled=true;$('scene-editor-tab').disabled=true;$('scene-editor-tab').textContent='Opening editor…';
   try {
     if(!makerLoading)makerLoading=Promise.all([import('./scene-maker.js'),import('./scene-project.js')]).then(async ([{mountSceneMaker},{validateSceneProject}])=>{
       if(!document.querySelector('link[data-maker-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href='./scene-maker.css';css.dataset.makerCss='true';document.head.append(css);}
@@ -509,16 +512,16 @@ async function openMaker(remix=false){
     sceneMaker=await makerLoading;
     if(epoch!==makerEpoch||view!=='world')return;
     if(language().id!==languageId){showView('world',{replace:true});return;}
-    player.pause();textAudio.stop();makerOpen=true;$('scene-maker-host').hidden=false;$('world-browser').hidden=true;document.querySelector('.maker-entry').hidden=true;
+    player.pause();textAudio.stop();makerOpen=true;$('scene-maker-host').hidden=false;$('world-browser').hidden=true;
     document.querySelector('.shell').classList.add('editing-scene');
     $('view-world').querySelector('.page-heading').hidden=true;
     await sceneMaker.open(options);
     if(epoch!==makerEpoch||view!=='world'||!makerOpen)return;
     document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view==='editor');if(el.dataset.view==='editor')el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
   }catch(error){if(epoch===makerEpoch){closeMakerView(false);showView('world',{replace:true});notify(error.message);}}
-  finally{$('make-scene').disabled=false;$('remix-scene').disabled=false;$('scene-editor-tab').disabled=false;$('scene-editor-tab').textContent='Scene editor';}
+  finally{$('remix-scene').disabled=false;$('scene-editor-tab').disabled=false;$('scene-editor-tab').textContent='Scene editor';}
 }
-$('make-scene').onclick=()=>showView('editor');$('remix-scene').onclick=()=>{nextMakerRemix=true;showView('editor');};
+$('remix-scene').onclick=()=>{nextMakerRemix=true;showView('editor');};
 cloudUI=mountCloudUI({library:cloudLibrary,service:cloudService,button:$('account-button'),getLanguage:language,openDialog,closeDialog,notify,
   openLocalCopy:document=>{
     if(project.languages.length>=50)throw new Error('This device already has 50 languages. Export and remove one before opening another.');

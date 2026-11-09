@@ -70,7 +70,7 @@ for (const routeChanged of [false, true]) test(routeChanged
     document: { querySelector: () => node(), querySelectorAll: () => [] },
     showView(view, options) { routes.push({ view, options }); }, notify() {}, closeMakerView() {},
   });
-  vm.runInContext(section('async function openMaker(', "$('make-scene').onclick"), context);
+  vm.runInContext(section('async function openMaker(', "$('remix-scene').onclick"), context);
   const opening = vm.runInContext('openMaker(true)', context);
   currentId = 'second';
   if (routeChanged) { context.makerEpoch++; context.view = 'words'; }
@@ -83,4 +83,33 @@ for (const routeChanged of [false, true]) test(routeChanged
     assert.equal(routes[0].view, 'world');
     assert.equal(routes[0].options.replace, true);
   }
+});
+
+test('opening and closing the scene editor restores focus to its navigation tab', async () => {
+  let focused = '', opened = 0;
+  const nodes = new Map(), get = id => {
+    if (!nodes.has(id)) nodes.set(id, { ...node(), focus() { focused = id; } });
+    return nodes.get(id);
+  };
+  const heading = node(), shell = node(), routes = [];
+  get('view-world').querySelector = selector => selector === '.page-heading' ? heading : null;
+  const context = vm.createContext({
+    $: get, makerEpoch: 0, makerLoading: Promise.resolve({ open() { opened++; } }),
+    sceneMaker: null, makerOpen: false, view: 'world', changingView: false,
+    language: () => ({ id: 'first' }), sceneId: 'bakery', episodeSelections: {},
+    currentScene: () => ({ choice: false }), player: { pause() {} }, textAudio: { stop() {} },
+    worldPreviewAvailable: () => false, matchMedia: () => ({ matches: false }),
+    document: { querySelector: selector => selector === '.shell' ? shell : null, querySelectorAll: () => [] },
+    showView(view) { routes.push(view); }, notify(message) { assert.fail(message); },
+  });
+  vm.runInContext(section('function closeMakerView(', "$('remix-scene').onclick"), context);
+  await vm.runInContext('openMaker()', context);
+  assert.equal(opened, 1);
+  assert.equal(heading.hidden, true);
+  assert.equal(get('world-browser').hidden, true);
+  vm.runInContext('closeMakerView()', context);
+  assert.equal(heading.hidden, false);
+  assert.equal(get('world-browser').hidden, false);
+  assert.equal(focused, 'scene-editor-tab');
+  assert.deepEqual(routes, ['world']);
 });
