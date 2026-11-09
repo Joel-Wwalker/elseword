@@ -145,9 +145,12 @@ test('scene context words edit actual lexical roots; missing roots stay visibly 
   assert.throws(() => renderSceneLine({ english: 'Unstructured prose.' }, language), /syntax/i);
 });
 
-test('version-2 linked seed output stays stable when release vocabulary is appended', () => {
+test('version-2 roots and legacy linked plural output stay stable', () => {
   api();
-  const words = createLanguage({ name: 'Luma', seed: 'episode-compat', preset: 'soft' }).words.slice(0, 220);
+  const language = createLanguage({ name: 'Luma', seed: 'episode-compat', preset: 'soft' });
+  // Existing documents retain this marker; new languages choose one from their sounds.
+  language.grammar.plural = 'en';
+  const words = validateLanguage(language).words.slice(0, 220);
   assert.equal(createHash('sha256').update(JSON.stringify(words)).digest('hex'), 'bdef97aad563785edfb87b4a812684d0a3024943c6cb2a5d978e5efd0d1419e0');
 });
 

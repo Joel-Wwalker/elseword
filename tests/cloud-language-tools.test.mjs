@@ -13,6 +13,7 @@ let db;
 
 function legacyDocument() {
   const doc = createLanguage({ seed: 'database-tools', name: 'Old kept language' });
+  doc.grammar = { order: 'SVO', adjective: 'before', plural: 'en', past: 'ta', future: 'va', negative: 'no', question: 'ka' };
   doc.version = 1;
   delete doc.phrases;
   delete doc.sounds.rules;

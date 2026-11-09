@@ -355,6 +355,7 @@ export function createLanguage(options = {}) {
   const name = textField(options.name, 'Language name', 60, { fallback: 'Luma', empty: false });
   const seed = textField(typeof options.seed === 'number' ? String(options.seed) : options.seed, 'Seed', 128, { fallback: 'luma', empty: false });
   const language = { version: 2, id: `lang-${hash(`${seed}|${name}|${selected.id}`).toString(36)}`, name, seed, preset: selected.id, sounds: clone(selected.sounds), grammar: clone(DEFAULT_GRAMMAR), script: clone(DEFAULT_SCRIPT), words: [], phrases: [], revision: 0 };
+  Object.assign(language.grammar, generateGrammarMarkers(language));
   const anchors = selected.id === 'soft' ? { one: 'na', bread: 'poma', please: 'li' } : {};
   const used = new Set(Object.values(anchors));
   language.words = CORE_VOCAB.map((entry) => {
@@ -365,19 +366,51 @@ export function createLanguage(options = {}) {
   return validateLanguage(linkCommonInflections(language));
 }
 
-export function regenerateLanguage(language) {
+/** Short markers use the inventory; whole-word restrictions do not constrain affixes. */
+export function generateGrammarMarkers(language, replace = ['plural', 'past', 'future', 'negative', 'question']) {
+  const sounds = normalizeSounds(language.sounds);
+  const markerLanguage = { ...language, sounds: { ...sounds, rules: undefined, minSyllables: 1, maxSyllables: 1 } };
+  const markers = {}, used = new Set(['plural', 'past', 'future', 'negative', 'question'].filter(key => !replace.includes(key)).map(key => language.grammar[key]).filter(Boolean));
+  for (const key of replace) {
+    let value = sounds.vowels[0];
+    for (let attempt = 0; attempt < 64; attempt++) {
+      const candidate = generateWord(markerLanguage, key, `grammar:${attempt}`);
+      if (charLength(candidate) > 12) continue;
+      value = candidate;
+      if (!used.has(value)) break;
+    }
+    markers[key] = value;
+    used.add(value);
+  }
+  return markers;
+}
+
+export function regenerateGrammarMarkers(language) {
+  const next = validateLanguage(language);
+  Object.assign(next.grammar, generateGrammarMarkers(next));
+  next.revision++;
+  return validateLanguage(next);
+}
+
+function regenerateVocabulary(language, restart) {
   const next = validateLanguage(language);
   next.sounds = normalizeSounds(next.sounds);
   next.revision = (next.revision ?? 0) + 1;
   const used = new Set(next.words.filter((word) => word.locked).map((word) => normalizeKey(word.word)));
   next.words = next.words.map((entry) => {
-    if (entry.locked || entry.family) return entry;
-    const word = generateDistinct(next, entry.english, next.revision, used);
+    if (entry.locked || (entry.family && !restart)) return entry;
+    const word = generateDistinct(next, entry.english, restart ? 0 : next.revision, used);
     used.add(normalizeKey(word));
-    return { ...entry, word };
+    // Initial creation reserves a candidate for every entry before linking
+    // inflections. Replay those reservations to recover the same root words.
+    return entry.family ? entry : { ...entry, word };
   });
   return validateLanguage(next);
 }
+
+export const regenerateLanguage = language => regenerateVocabulary(language, false);
+/** Reset the generation salt only; kept words, grammar and other edits survive. */
+export const restartVocabulary = language => regenerateVocabulary(language, true);
 
 const tokenize = (value) => String(value ?? '').normalize('NFC').match(/[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*|\s+|[^\p{L}\p{M}\p{N}\s]/gu) ?? [];
 const isLexical = (value) => /^[\p{L}\p{M}\p{N}]/u.test(value);
