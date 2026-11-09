@@ -1,4 +1,5 @@
 import { CORE_VOCAB, PRESETS, createLanguage, generateWord, regenerateLanguage, translateText, composeSentence, validateLanguage, exportCSV, generateNames, applySoundChange, renderWriting } from './engine.js';
+import { translateSentence } from './sentence-translator.js';
 import { createLanguageGenerator } from './language-generator.js';
 import { WRITING_PRESETS, applyWritingPreset, identifyWritingPreset } from './writing-presets.js';
 import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes } from './scenes.js';
@@ -71,7 +72,7 @@ function checkpoint() { history.push(clone({languages:project.languages,activeId
 function commit(next, message, {render=true}={}) {
   let valid;
   try { valid=validateLanguage(next); } catch(error) { notify(error.message); return false; }
-  checkpoint(); project.languages=project.languages.map(item=>item.id===project.activeId?valid:item); project.activeId=valid.id; save();
+  clearTranslation(); checkpoint(); project.languages=project.languages.map(item=>item.id===project.activeId?valid:item); project.activeId=valid.id; save();
   if(render)renderAll(); else {renderSummary();player?.refresh();languageTools?.refresh();}
   if(message)notify(message); return true;
 }
@@ -204,7 +205,7 @@ function renderGloss({sound=false}={}) {
 }
 function renderWritingPanel() {renderSentenceSelectors();renderSentence();renderAlphabet();renderGloss();}
 function renderNames({sound=false}={}) {const temp={...language(),revision:language().revision+namesRoll};const names=generateNames(temp,6,$('name-kind').value);$('generated-names').innerHTML=names.map(name=>`<div class="generated-name"><span>${escapeHTML(name)}</span><button data-copy-name="${escapeHTML(name)}" aria-label="Copy ${escapeHTML(name)}">↗</button></div>`).join('');if(sound)playGenerated(names.join(' '));}
-function renderAll() {renderSummary();renderScenePicker();renderContextWords();renderCast();renderDictionary();renderRules();renderWritingPanel();renderNames();player?.refresh();languageTools?.refresh();}
+function renderAll() {clearTranslation();renderSummary();renderScenePicker();renderContextWords();renderCast();renderDictionary();renderRules();renderWritingPanel();renderNames();player?.refresh();languageTools?.refresh();}
 
 function openDialog(title,body,actions='') {
   textAudio.stop();
@@ -253,6 +254,24 @@ function addCreatedLanguage(fresh) {
   if(project.languages.length>=50)throw new Error('You can keep 50 languages on this device. Export and remove one first.');
   fresh.id=uid();checkpoint();project.languages.push(fresh);project.activeId=fresh.id;page=0;save();closeDialog();renderAll();showView('world');player.replay();if(!worldPreviewAvailable())player.pause();notify(`${fresh.name} created.`);
 }
+function clearTranslation() {
+  $('translation-result').hidden=true;$('translation-output').textContent='';$('translation-status').textContent='';$('copy-translation').disabled=true;
+}
+$('translate-input').oninput=clearTranslation;
+$('translate-english').onclick=()=>{
+  clearTranslation();
+  const result=translateSentence(language(),$('translate-input').value);
+  if(!result.supported){$('translation-status').textContent=result.warnings.join(' ');return;}
+  if(result.addedWords.length&&!commit(result.language,null))return;
+  const text=renderWriting(result.text,language());
+  $('translation-output').textContent=text;$('translation-output').dir=language().script.direction;$('translation-result').hidden=false;
+  $('translation-status').textContent=[result.addedWords.length?`Added ${result.addedWords.map(word=>word.english).join(', ')} to your dictionary. Undo is available.`:'Used your existing dictionary.',...result.warnings].join(' ');
+  $('copy-translation').disabled=false;playGenerated(text);
+};
+$('copy-translation').onclick=async()=>{
+  try{await navigator.clipboard.writeText($('translation-output').textContent);notify('Translation copied.');}
+  catch{notify('Copy is unavailable. Select the translation and copy it manually.');}
+};
 function newLanguageDialog() {
   openDialog('Create a language',`<p class="dialog-intro">Generate a language with its own sounds, words and grammar. Everything is yours to edit.</p><p class="small-note">Generation needs an internet connection. No account needed.</p><details class="advanced"><summary>Choose your own starting point</summary><div class="advanced-body"><div class="form-grid"><label>Language name<input id="new-name" value="" placeholder="Language name" maxlength="40"></label><label>Starting sound<select id="new-preset">${PRESETS.map(p=>option(p.id,p.name)).join('')}</select></label></div><label>Seed <span class="footnote">Same seed, same starting words</span><input id="new-seed" value="${Date.now().toString(36)}" maxlength="80"></label><button class="secondary-button" id="confirm-create">Create from these settings</button></div></details>`,`<button class="secondary-button" data-close>Cancel</button><button class="primary-button" id="generate-language">Generate language</button>`);
   const generateButton=$('generate-language'), manualButton=$('confirm-create'), errorBox=$('modal-error');
