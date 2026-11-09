@@ -35,14 +35,15 @@ for(const id of ['writing-alphabet','writing-lookup']){
 const textAudio = new TextAudio({storage});
 textAudio.subscribe(({enabled,supported,ready}) => {
   const button=$('text-sound-toggle');
-  button.textContent=supported?`♪ SFX ${enabled?'ON':'OFF'}`:'SFX N/A';
+  const active=enabled&&ready;
+  button.textContent=!supported?'SFX N/A':enabled&&!ready?'♪ Enable sound':`♪ SFX ${enabled?'ON':'OFF'}`;
   button.disabled=!supported;
-  button.setAttribute('aria-pressed',String(enabled&&supported));
-  button.setAttribute('aria-label',supported?(enabled?'Mute text sounds':'Enable text sounds'):'Text sounds unavailable');
+  button.setAttribute('aria-pressed',String(active&&supported));
+  button.setAttribute('aria-label',supported?(active?'Mute text sounds':'Enable text sounds'):'Text sounds unavailable');
   button.dataset.soundState=!supported?'unavailable':!enabled?'muted':ready?'ready':'waiting';
-  button.title=!supported?'This browser does not support text sounds.':enabled&&!ready?'Retro text sounds start after your first interaction.':enabled?'Mute text sounds across the studio.':'Enable text sounds across the studio.';
+  button.title=!supported?'This browser does not support text sounds.':enabled&&!ready?'Click to start text sounds.':enabled?'Mute text sounds across the studio.':'Enable text sounds across the studio.';
 });
-$('text-sound-toggle').onclick=()=>{textAudio.setEnabled(!textAudio.enabled);if(textAudio.enabled)void textAudio.unlock();};
+$('text-sound-toggle').onclick=()=>{textAudio.setEnabled(!(textAudio.enabled&&textAudio.ready));if(textAudio.enabled)void textAudio.unlock();};
 let project = loadProject(storage);
 let vocabularyUpdated = false;
 project.languages = project.languages.map(item => {

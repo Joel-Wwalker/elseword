@@ -142,6 +142,36 @@ test('sound-toggle activation does not resume audio before its click handler can
   f.audio.destroy();
 });
 
+test('touch and pen playback wait for pointer release before requesting audio', async () => {
+  for (const pointerType of ['touch', 'pen']) {
+    const f = fixture({ suspended: true });
+    f.document.dispatch('pointerdown', { pointerType });
+    assert.equal(f.contexts.length, 0, 'Contact alone is not an audio activation gesture');
+    f.document.dispatch('pointerup', { pointerType });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.audio.blip('a', 'moss'), true);
+    assert.equal(f.outputs.length, 1);
+    f.audio.destroy();
+  }
+});
+
+test('click activation starts voices without requiring a preceding pointer event', async () => {
+  const f = fixture({ suspended: true });
+  f.document.dispatch('click');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.audio.blip('a'), true);
+  f.audio.destroy();
+});
+
+test('touch release and click on a sound toggle leave activation to its handler', () => {
+  const f = fixture();
+  const target = { closest: () => ({}) };
+  f.document.dispatch('pointerup', { pointerType: 'touch', target });
+  f.document.dispatch('click', { target });
+  assert.equal(f.contexts.length, 0);
+  f.audio.destroy();
+});
+
 test('blips filter punctuation, throttle to 40ms, and release ended audio nodes', async () => {
   const f = fixture();
   await f.audio.unlock();

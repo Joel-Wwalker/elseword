@@ -254,7 +254,7 @@ export class ScenePlayer {
     listen(this.el.episodeNext, 'click', () => this.nextEpisode());
     listen(this.el.speed, 'change', () => this.setSpeed(this.el.speed.value));
     listen(this.el.english, 'click', () => this.setEnglish(!this.english));
-    listen(this.el.sound, 'click', () => this.setSound(!this.sound));
+    listen(this.el.sound, 'click', () => this.setSound(!(this.sound && this.textAudio.ready)));
     listen(document, 'visibilitychange', () => {
       this.lastTime = 0;
       if (document.hidden) this.textAudio.stop();
@@ -542,11 +542,12 @@ export class ScenePlayer {
     this.el.status.textContent = this.awaitingChoice ? 'YOUR REPLY' : this.paused ? 'SCENE PAUSED' : 'SCENE PLAYING';
     const supported = this.textAudio?.supported !== false;
     const enabled = this.sound && supported;
-    this.el.sound.textContent = enabled ? 'SFX ON' : 'SFX OFF';
-    this.el.sound.setAttribute('aria-label', enabled ? 'Mute text sounds' : 'Enable text sounds');
-    this.el.sound.setAttribute('aria-pressed', String(enabled));
+    const active = enabled && this.textAudio?.ready === true;
+    this.el.sound.textContent = enabled ? (active ? 'SFX ON' : 'Enable sound') : 'SFX OFF';
+    this.el.sound.setAttribute('aria-label', active ? 'Mute text sounds' : 'Enable text sounds');
+    this.el.sound.setAttribute('aria-pressed', String(active));
     this.el.sound.disabled = !supported;
-    this.el.sound.title = supported ? 'Text sound effects' : 'Text sounds are unavailable in this browser';
+    this.el.sound.title = !supported ? 'Text sounds are unavailable in this browser' : enabled && !active ? 'Click to start text sounds.' : 'Text sound effects';
   }
 
   render({ audible = false } = {}) {

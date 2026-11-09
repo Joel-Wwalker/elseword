@@ -76,7 +76,15 @@ export class TextAudio {
       if (event?.repeat || event?.target?.closest?.('[data-text-sound-toggle]')) return;
       void this.unlock();
     };
-    this._listen(this._document, 'pointerdown', gesture, true);
+    // Mouse presses activate immediately; touch and pen activate on release.
+    // Starting resume on contact can leave it waiting for a valid gesture.
+    this._listen(this._document, 'pointerdown', event => {
+      if (!event?.pointerType || event.pointerType === 'mouse') gesture(event);
+    }, true);
+    this._listen(this._document, 'pointerup', event => {
+      if (event?.pointerType !== 'mouse') gesture(event);
+    }, true);
+    this._listen(this._document, 'click', gesture, true);
     this._listen(this._document, 'keydown', gesture, true);
     this._listen(this._document, 'visibilitychange', () => { if (this._hidden()) this.stop(); });
     this._listen(this._window, 'pagehide', () => this.stop());

@@ -195,6 +195,17 @@ test('destroy unsubscribes and cancels audio without destroying the injected sha
   assert.equal(audio.destroys, 0);
 });
 
+test('the scene sound button starts a waiting voice instead of muting it', t => {
+  const audio = audioBoundary();
+  audio.ready = false;
+  const { player } = fixture(t, audio);
+  assert.equal(player.el.sound.attributes['aria-pressed'], 'false');
+  assert.equal(player.el.sound.attributes['aria-label'], 'Enable text sounds');
+  player.el.sound.dispatchEvent(new Event('click'));
+  assert.equal(audio.enabled, true);
+  assert.equal(audio.unlocks, 1);
+});
+
 test('a standalone player destroys its owned controller and cannot reactivate it', t => {
   const { player } = fixture(t, null);
   const owned = player.textAudio;
