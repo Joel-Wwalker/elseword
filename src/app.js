@@ -165,7 +165,7 @@ function renderRules() {
 }
 function renderGenerationStatus() {
   const report=generationDiagnostics(language());
-  const capacity=report.capacity===null?'':`These sound rules allow ${report.capacity.toLocaleString()} distinct word forms. `;
+  const capacity=report.capacity===null?'':`These sound rules allow ${report.capacity.toLocaleString()} distinct root spellings. Kept and derived words can differ. `;
   $('generation-status').textContent=capacity+(report.collisions.length?`${report.sharedMeanings} meanings share ${report.collisions.length} spellings. Linked verb forms are excluded.`:'');
   $('generation-status').hidden=!$('generation-status').textContent;
   const incompatible=report.incompatibleMarkers;
@@ -186,7 +186,7 @@ function generateVocabulary({restart=false}={}) {
     };
     if(!restart&&!report.collisions.length){apply();return;}
     const examples=report.collisions.slice(0,3).map(group=>`<li><strong>${escapeHTML(group.word)}</strong>: ${group.meanings.slice(0,5).map(escapeHTML).join(', ')}${group.meanings.length>5?'…':''}</li>`).join('');
-    const repeated=report.collisions.length?`<p>${report.sharedMeanings} meanings would share ${report.collisions.length} spellings.${report.capacity===null?'':` These sound rules allow ${report.capacity.toLocaleString()} distinct word forms.`} You can keep these homonyms or cancel and add more sounds.</p><ul>${examples}</ul>`:'';
+    const repeated=report.collisions.length?`<p>${report.sharedMeanings} meanings would share ${report.collisions.length} spellings.${report.capacity===null?'':` These sound rules allow ${report.capacity.toLocaleString()} distinct root spellings. Kept and derived words can differ.`} You can keep these homonyms or cancel and add more sounds.</p><ul>${examples}</ul>`:'';
     openDialog(restart?'Restart vocabulary from seed?':'Some words share a spelling',`<p class="dialog-intro">${restart?'Recreate the starting word choices using the saved seed and sound settings. Kept words, grammar and dictionary entries stay in place.':'Review the repeated spellings before replacing your vocabulary.'} Undo is available.</p>${repeated}`,`<button class="secondary-button" data-close>Cancel</button><button class="primary-button" id="confirm-vocabulary">${report.collisions.length?'Use these words':'Restart vocabulary'}</button>`);
     $('confirm-vocabulary').onclick=apply;
   }catch(error){notify(error.message);}
