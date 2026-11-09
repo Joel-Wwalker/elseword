@@ -415,7 +415,7 @@ export const restartVocabulary = language => regenerateVocabulary(language, true
 const tokenize = (value) => String(value ?? '').normalize('NFC').match(/[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*|\s+|[^\p{L}\p{M}\p{N}\s]/gu) ?? [];
 const isLexical = (value) => /^[\p{L}\p{M}\p{N}]/u.test(value);
 
-/** Dictionary substitution only. No inferred syntax or unlisted inflections. */
+/** Dictionary substitution, with a/an sharing the article used by sentence tools. */
 export function translateText(text, language) {
   const source = String(text ?? '');
   if (source.length > 20000) throw new Error('Gloss input is too long (maximum 20000 characters).');
@@ -428,6 +428,11 @@ export function translateText(text, language) {
     const first = normalizeKey(parts[0]);
     if (!dictionary.has(first)) dictionary.set(first, []);
     dictionary.get(first).push({ entry, parts });
+  }
+  const article = entryFor(language, 'a');
+  if (article) {
+    const expressions = (dictionary.get('an') ?? []).filter(candidate => candidate.parts.length > 1);
+    dictionary.set('an', [...expressions, { entry: article, parts: ['an'] }]);
   }
   for (const list of dictionary.values()) list.sort((a, b) => b.parts.length - a.parts.length);
   const tokens = [];
@@ -459,9 +464,11 @@ export function translateText(text, language) {
 export function composeSentence(options = {}, language) {
   try {
     const grammar = grammarFor(language), clause = clauseFromSelections(options, language), syntax = clauseSyntax(clause);
-    const lookup = value => {
+    const lookup = (value, pos) => {
       const word = entryFor(language, value);
-      return token(word?.word ?? `⟦${value}⟧`, { kind: 'word', key: value, wordId: word?.id, known: Boolean(word) });
+      if (!word) throw new Error(`The sentence needs “${value}”, which is missing from this dictionary. Add it or choose different words.`);
+      if (pos && word.pos !== pos) throw new Error(`The sentence needs “${value}” as ${pos}, but it is listed as ${word.pos}.`);
+      return token(word.word, { kind: 'word', key: value, wordId: word.id, known: true });
     };
     const pluralLookup = node => {
       const word = pluralEntry(language, node.head.key, node.surface);

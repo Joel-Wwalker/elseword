@@ -1,4 +1,5 @@
-import { validateSceneProject, createSceneProject, compileSceneProject, loadSceneProjects, saveSceneProjects, SCENE_PROPS } from './scene-project.js';
+import { validateSceneProject, createSceneProject, compileSceneProject, assertScenePlayable, loadSceneProjects, saveSceneProjects, SCENE_PROPS } from './scene-project.js';
+import { sentenceChoices, canPluralizeObject } from './sentence-grammar.js';
 import { CHARACTERS, SCENES, getSceneEpisodes } from './scenes.js';
 import { TextAudio } from './text-audio.js';
 import { CloudLibrary } from './cloud-library.js';
@@ -33,6 +34,7 @@ export function convertSceneBeat(project, id, mode) {
   if (!['literal', 'builder'].includes(mode)) throw new Error('Choose custom text or the sentence builder.');
   const next = structuredClone(project), index = beatIndex(next, id), beat = next.beats[index];
   const resolved = compileSceneProject(project).beats[index];
+  if (mode === 'literal' && resolved.error) throw new Error(`Line ${index + 1}: ${resolved.error}`);
   delete beat.template; delete beat.options; delete beat.text; delete beat.english;
   beat.mode = mode;
   if (mode === 'literal') { beat.text = resolved.text; beat.english = resolved.english; }
@@ -176,6 +178,7 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
   }
   function play() {
     if (!project || recording || playing || previewCollapsed || !opened) return;
+    try { flushForm(); assertScenePlayable(compiled); } catch (error) { report(error); return; }
     $('video-player').pause();
     if (position >= compiled.duration) position = 0;
     playing = true; if (project.sound) void audio.unlock(); resetAudioIndex(); lastTick = performance.now();
@@ -198,10 +201,13 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
     $('undo').disabled = !history.length || Boolean(recording); $('add-beat').disabled = $('add-pause').disabled = project.beats.length >= 24 || Boolean(recording);
     $('beat-count').textContent = `${project.beats.length} / 24 lines · ${timeLabel(compiled.duration)}`;
     const overVideoLimit = compiled.duration > 60000;
-    $('video-export').disabled = Boolean(recording) || overVideoLimit;
-    $('video-limit').textContent = overVideoLimit ? 'This scene is over 60 seconds. Shorten dialogue or pauses to export it.' : '';
-    if (overVideoLimit) $('video-export').setAttribute('aria-describedby', 'sm-video-limit'); else $('video-export').removeAttribute('aria-describedby');
-    renderTemplates(); renderBoard(); if (editor) renderEditor(); renderLibrary(); renderCloud(); draw();
+    const invalid = compiled.errors.length > 0;
+    $('video-export').disabled = Boolean(recording) || overVideoLimit || invalid;
+    $('play').disabled = invalid;
+    $('video-limit').textContent = invalid ? 'Fix the marked lines before playing or exporting. You can still save this draft.' : overVideoLimit ? 'This scene is over 60 seconds. Shorten dialogue or pauses to export it.' : '';
+    if (overVideoLimit || invalid) $('video-export').setAttribute('aria-describedby', 'sm-video-limit'); else $('video-export').removeAttribute('aria-describedby');
+    if (invalid) $('play').setAttribute('aria-describedby', 'sm-video-limit'); else $('play').removeAttribute('aria-describedby');
+    renderTemplates(); renderBoard(); if (editor) renderEditor(); else renderBuilderFeedback(); renderLibrary(); renderCloud(); draw();
     $('notice').textContent = recoveryWarning;
     $('export-recovery').hidden = !(local.recoveryRaw || currentRecoveryRaw);
   }
@@ -216,18 +222,30 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
     $('choice').innerHTML = (choices.length ? option('', 'Choose a reply', !previous) : '') + choices.map(choice => option(choice.id, choice.label ?? choice.english ?? choice.id, choice.id === previous)).join('');
   }
   function renderBoard() {
-    $('beats').innerHTML = compiled.beats.map((beat, index) => `<li><button type="button" data-sm-beat="${index}" class="sm-beat${index === selected ? ' selected' : ''}" aria-pressed="${index === selected}"><span class="sm-beat-number">${index + 1}</span><span><strong>${escapeHTML(CHARACTERS.find(person => person.id === project.cast[beat.speaker])?.name)} <small>${escapeHTML(beat.mode === 'template' ? 'Conversation' : beat.mode === 'builder' ? 'Sentence builder' : 'Custom text')}</small></strong><span>${escapeHTML(beat.english || beat.text || 'A quiet pause')}</span><small>${actions[beat.action]} · ${timeLabel(beat.end - beat.start)}</small></span></button></li>`).join('');
+    $('beats').innerHTML = compiled.beats.map((beat, index) => `<li><button type="button" data-sm-beat="${index}" class="sm-beat${index === selected ? ' selected' : ''}" aria-pressed="${index === selected}"><span class="sm-beat-number">${index + 1}</span><span><strong>${escapeHTML(CHARACTERS.find(person => person.id === project.cast[beat.speaker])?.name)} <small>${escapeHTML(beat.mode === 'template' ? 'Conversation' : beat.mode === 'builder' ? 'Sentence builder' : 'Custom text')}</small></strong><span>${escapeHTML(beat.error ? `Fix line: ${beat.error}` : beat.english || beat.text || 'A quiet pause')}</span><small>${actions[beat.action]} · ${beat.error ? 'Needs editing' : timeLabel(beat.end - beat.start)}</small></span></button></li>`).join('');
   }
   function wordOptions(key, current) {
-    const types = { subject: ['noun', 'pronoun'], verb: ['verb'], object: ['noun', 'pronoun', 'adjective'], adjective: ['adjective'] };
-    const words = project.language.words.filter(word => types[key].includes(word.pos) || word.id === current || word.english === current);
-    return option('', 'None', !current) + words.map(word => option(word.id, word.english, word.id === current || word.english === current)).join('');
+    const words = sentenceChoices(project.language)[key];
+    const existing = project.language.words.find(word => word.id === current || word.english === current);
+    const retained = current && !words.some(word => word.id === current || word.english === current)
+      ? option(current, `${existing?.english ?? current} (${existing ? 'saved choice' : 'unavailable'})`, true) : '';
+    return option('', 'None', !current) + retained + words.map(word => option(word.id, word.english, word.id === current || word.english === current)).join('');
+  }
+  function renderBuilderFeedback() {
+    const beat = project.beats[selected], resolved = compiled.beats[selected];
+    if (beat?.mode !== 'builder') return;
+    $('line-error').textContent = resolved.error;
+    const plural = $('beat-editor').querySelector('[data-sm-option="plural"]');
+    plural.disabled = !canPluralizeObject(beat.options, project.language);
+    plural.title = 'Applies to the noun in “To what”.';
+    $('beat-editor').querySelector('[data-sm-convert="literal"]').disabled = Boolean(resolved.error);
   }
   function renderEditor() {
     const beat = project.beats[selected]; if (!beat) return;
     const resolved = compiled.beats[selected];
-    const dialogue = beat.mode === 'template' ? `<p class="sm-help">This line uses the scene's words and grammar.</p><p class="sm-template-quote">${escapeHTML(resolved.english)}</p><div class="sm-actions"><button class="secondary-button" data-sm-convert="literal">Edit text</button><button class="text-button" data-sm-convert="builder">Use sentence builder</button></div>` : beat.mode === 'literal' ? `<div class="sm-editor-grid"><label>${escapeHTML(project.language.name)} dialogue<textarea data-sm-field="text" rows="3" maxlength="300" dir="${project.language.script.direction}">${escapeHTML(beat.text)}</textarea></label><label>English caption<textarea data-sm-field="english" rows="3" maxlength="300">${escapeHTML(beat.english)}</textarea></label></div><p class="sm-help">Your text stays as written. Enter both languages yourself; grammar changes will not update this line.</p><button class="text-button" data-sm-convert="builder">Use sentence builder</button>` : `<div class="sm-editor-grid">${slotKeys.map(key => `<label>${({ subject: 'Who', verb: 'Does what', object: 'To what', adjective: 'Description' })[key]}<select data-sm-option="${key}">${wordOptions(key, beat.options?.[key])}</select></label>`).join('')}<label>Time<select data-sm-option="tense">${[['present', 'Now'], ['past', 'Before'], ['future', 'Later']].map(([value, label]) => option(value, label, value === (beat.options?.tense ?? 'present'))).join('')}</select></label></div><div class="sm-actions">${['plural', 'negative', 'question'].map(key => `<label class="sm-checkbox"><input type="checkbox" data-sm-option="${key}"${beat.options?.[key] ? ' checked' : ''}>${({ plural: 'More than one', negative: 'Negative', question: 'Question' })[key]}</label>`).join('')}</div><button class="text-button" data-sm-convert="literal">Edit text directly</button>`;
-    $('beat-editor').innerHTML = `<div class="sm-section-heading"><h2>Line ${selected + 1}</h2><div class="sm-actions sm-beat-actions"><button data-sm-move="-1" aria-label="Move line up"${selected === 0 ? ' disabled' : ''}>↑</button><button data-sm-move="1" aria-label="Move line down"${selected === project.beats.length - 1 ? ' disabled' : ''}>↓</button><button data-sm-duplicate aria-label="Duplicate line"${project.beats.length >= 24 ? ' disabled' : ''}>Copy</button><button data-sm-remove aria-label="Delete line"${project.beats.length <= 1 ? ' disabled' : ''}>Delete</button></div></div><label>Character<select data-sm-field="speaker">${project.cast.map((id, index) => option(index, CHARACTERS.find(person => person.id === id)?.name, index === beat.speaker)).join('')}</select></label><div class="sm-dialogue-editor">${dialogue}</div><details class="sm-action-settings"${beat.action !== 'none' || beat.pauseMs !== 600 ? ' open' : ''}><summary>Action and timing</summary><div class="sm-editor-grid"><label>Action<select data-sm-field="action">${Object.entries(actions).map(([value, label]) => option(value, label, value === beat.action)).join('')}</select></label><label>When<select data-sm-field="cue">${[['start', 'At the start'], ['end', 'After speaking'], ['word', 'At a word']].map(([value, label]) => option(value, label, value === beat.cue)).join('')}</select></label><label>Word number<input data-sm-field="wordIndex" type="number" min="1" max="300" value="${beat.wordIndex + 1}"${beat.cue !== 'word' ? ' disabled' : ''}></label><label>Pause after (seconds)<input data-sm-field="pauseMs" type="number" min="0" max="5" step="0.1" value="${beat.pauseMs / 1000}"></label></div><p class="sm-help">Characters move within the room. Leave the dialogue blank to add a quiet pause.</p></details>`;
+    const dialogue = beat.mode === 'template' ? `<p class="sm-help">This line uses the scene's words and grammar.</p><p class="sm-template-quote">${escapeHTML(resolved.english)}</p><div class="sm-actions"><button class="secondary-button" data-sm-convert="literal">Edit text</button><button class="text-button" data-sm-convert="builder">Use sentence builder</button></div>` : beat.mode === 'literal' ? `<div class="sm-editor-grid"><label>${escapeHTML(project.language.name)} dialogue<textarea data-sm-field="text" rows="3" maxlength="300" dir="${project.language.script.direction}">${escapeHTML(beat.text)}</textarea></label><label>English caption<textarea data-sm-field="english" rows="3" maxlength="300">${escapeHTML(beat.english)}</textarea></label></div><p class="sm-help">Your text stays as written. Enter both languages yourself; grammar changes will not update this line.</p><button class="text-button" data-sm-convert="builder">Use sentence builder</button>` : `<div class="sm-editor-grid">${slotKeys.map(key => `<label>${({ subject: 'Who', verb: 'Does what', object: 'To what', adjective: 'Description' })[key]}<select data-sm-option="${key}">${wordOptions(key, beat.options?.[key])}</select></label>`).join('')}<label>Time<select data-sm-option="tense">${[['present', 'Now'], ['past', 'Before'], ['future', 'Later']].map(([value, label]) => option(value, label, value === (beat.options?.tense ?? 'present'))).join('')}</select></label></div><div class="sm-actions">${['plural', 'negative', 'question'].map(key => `<label class="sm-checkbox"><input type="checkbox" data-sm-option="${key}"${beat.options?.[key] ? ' checked' : ''}>${({ plural: 'Plural object', negative: 'Negative', question: 'Question' })[key]}</label>`).join('')}</div><button class="text-button" data-sm-convert="literal">Edit text directly</button>`;
+    $('beat-editor').innerHTML = `<div class="sm-section-heading"><h2>Line ${selected + 1}</h2><div class="sm-actions sm-beat-actions"><button data-sm-move="-1" aria-label="Move line up"${selected === 0 ? ' disabled' : ''}>↑</button><button data-sm-move="1" aria-label="Move line down"${selected === project.beats.length - 1 ? ' disabled' : ''}>↓</button><button data-sm-duplicate aria-label="Duplicate line"${project.beats.length >= 24 ? ' disabled' : ''}>Copy</button><button data-sm-remove aria-label="Delete line"${project.beats.length <= 1 ? ' disabled' : ''}>Delete</button></div></div><label>Character<select data-sm-field="speaker">${project.cast.map((id, index) => option(index, CHARACTERS.find(person => person.id === id)?.name, index === beat.speaker)).join('')}</select></label><div class="sm-dialogue-editor">${dialogue}${beat.mode === 'builder' ? '<p id="sm-line-error" class="sm-error" role="status" aria-live="polite"></p>' : ''}</div><details class="sm-action-settings"${beat.action !== 'none' || beat.pauseMs !== 600 ? ' open' : ''}><summary>Action and timing</summary><div class="sm-editor-grid"><label>Action<select data-sm-field="action">${Object.entries(actions).map(([value, label]) => option(value, label, value === beat.action)).join('')}</select></label><label>When<select data-sm-field="cue">${[['start', 'At the start'], ['end', 'After speaking'], ['word', 'At a word']].map(([value, label]) => option(value, label, value === beat.cue)).join('')}</select></label><label>Word number<input data-sm-field="wordIndex" type="number" min="1" max="300" value="${beat.wordIndex + 1}"${beat.cue !== 'word' ? ' disabled' : ''}></label><label>Pause after (seconds)<input data-sm-field="pauseMs" type="number" min="0" max="5" step="0.1" value="${beat.pauseMs / 1000}"></label></div><p class="sm-help">Characters move within the room. Leave the dialogue blank to add a quiet pause.</p></details>`;
+    renderBuilderFeedback();
   }
   function renderLibrary() {
     const select = $('local-list'), previous = select.value || local.activeId;
@@ -264,6 +282,7 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
   async function recordVideo() {
     if (recording) return;
     flushForm();
+    assertScenePlayable(compiled);
     if (compiled.duration > 60000) throw new Error('Shorten the scene to 60 seconds or less before recording.');
     const frozen = validateSceneProject(project), controller = new AbortController(); recording = controller; pause(); $('video-player').pause();
     renderPreviewVisibility();

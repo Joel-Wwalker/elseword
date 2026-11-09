@@ -9,16 +9,17 @@ const AUXILIARIES = { do: 'present', does: 'present', did: 'past', will: 'future
 const COMMON_ADJECTIVES = new Set('red blue green yellow black white purple orange pink gray grey tall short young hungry thirsty beautiful strange brave clever angry fucking shitty damn goddamn crappy'.split(' '));
 const BLOCKED = new Set('and or but because if unless although while who what where when why how which whose to from with without in on at under over into through for of can could may might must should would shall than as very too only every each any all some more most'.split(' '));
 const CONTRACTIONS = { "don't": 'do not', "doesn't": 'does not', "didn't": 'did not', "won't": 'will not', "isn't": 'is not', "aren't": 'are not', "wasn't": 'was not', "weren't": 'were not', "i'm": 'i am', "you're": 'you are', "we're": 'we are', "they're": 'they are' };
-const FIXED_EXPRESSIONS = new Set(['shit', 'fuck', 'fuck you', 'damn it', 'bullshit', 'holy shit', 'hello', 'goodbye', 'thank you', 'sorry', 'excuse me', 'welcome']);
+const FIXED_EXPRESSIONS = new Set(['shit', 'fuck', 'fuck you', 'damn it', 'bullshit', 'holy shit', 'hello', 'goodbye', 'thank you', 'sorry', 'excuse me', 'welcome', 'yes', 'no', 'please', 'maybe']);
 
 function fail(message) { throw new Error(message); }
 function adjective(language, english) { return entry(language, english)?.pos === 'adjective' || COMMON_ADJECTIVES.has(english); }
+function pronoun(language, english) { return SUBJECTS.has(english) || entry(language, english)?.pos === 'pronoun'; }
 
 function noun(language, surface, warnings) {
   const existing = entry(language, surface);
   const known = knownNounForm(language, surface);
   if (known) return known;
-  if (existing) fail(`“${surface}” is not a noun in this dictionary.`);
+  if (existing) fail(`“${surface}” is listed as ${existing.pos}. The translator cannot use it in this noun phrase yet. Try a simple noun or pronoun.`);
   if (COMMON_ADJECTIVES.has(surface) || surface.endsWith('ly')) fail(`“${surface}” looks like an adjective or adverb. Use a noun, or add it to the dictionary as a noun first.`);
   if (surface.endsWith('ing') || surface.endsWith('ed')) fail(`“${surface}” could be a noun or a verb form. Use a simpler noun phrase.`);
   let root = surface, plural = false;
@@ -37,7 +38,7 @@ function noun(language, surface, warnings) {
     else if (/(?:ses|xes|zes|oes|ves|thes)$/.test(surface)) fail(`I cannot determine the singular of “${surface}”. Add its singular or plural to the dictionary first.`);
     else root = surface.slice(0, -1);
     plural = true;
-    if (entry(language, root) && entry(language, root).pos !== 'noun') fail(`“${root}” is not a noun in this dictionary.`);
+    if (entry(language, root) && entry(language, root).pos !== 'noun') fail(`“${root}” is listed as ${entry(language, root).pos}. The translator cannot use it as a noun here.`);
   }
   if (!root || root.length > 60) fail('Use a noun shorter than 61 letters.');
   if (plural && !entry(language, root)) warnings.push(`Treated “${surface}” as the plural of “${root}”.`);
@@ -47,12 +48,14 @@ function noun(language, surface, warnings) {
 function phrase(language, tokens, warnings, { subject = false, predicate = false } = {}) {
   if (!tokens.length || tokens.length > 3) fail('Use one noun, with an optional article and one adjective.');
   const words = [...tokens];
-  if (words.length === 1 && (SUBJECTS.has(words[0]) || (!subject && Object.hasOwn(OBJECT_PRONOUNS, words[0])))) return { root: OBJECT_PRONOUNS[words[0]] ?? words[0], pronoun: true };
+  if (words.length === 1 && (pronoun(language, words[0]) || (!subject && Object.hasOwn(OBJECT_PRONOUNS, words[0])))) {
+    return { root: !subject && Object.hasOwn(OBJECT_PRONOUNS, words[0]) ? OBJECT_PRONOUNS[words[0]] : words[0], pronoun: true };
+  }
   if (predicate && words.length === 1 && adjective(language, words[0])) return { root: words[0], adjectiveOnly: true };
   const article = ARTICLES.has(words[0]) ? words.shift() : '';
   let modifier = '';
   if (words.length === 2 && adjective(language, words[0])) modifier = words.shift();
-  if (words.length !== 1) fail('Use a pronoun or a clear noun phrase, such as “the dragon” or “a red apple”.');
+  if (words.length !== 1) fail('This noun phrase is not supported yet. Use a pronoun or one noun with an optional article and adjective, such as “the dragon” or “a red apple”.');
   const result = noun(language, words[0], warnings);
   if (subject && !article && !result.plural && !entry(language, result.root)) fail('Use an article before an unfamiliar singular subject, such as “the dragon”.');
   if (['a', 'an'].includes(article) && result.plural) fail('Use a singular noun after “a” or “an”.');
@@ -76,7 +79,7 @@ function parse(language, english, warnings) {
     copula = Object.hasOwn(COPULAS, auxiliary);
     tense = copula ? COPULAS[auxiliary] : AUXILIARIES[auxiliary];
   }
-  let subjectCount = SUBJECTS.has(tokens[0]) ? 1 : ARTICLES.has(tokens[0]) ? (adjective(language, tokens[1]) ? 3 : 2) : 1;
+  let subjectCount = pronoun(language, tokens[0]) ? 1 : ARTICLES.has(tokens[0]) ? (adjective(language, tokens[1]) ? 3 : 2) : 1;
   const subject = phrase(language, tokens.splice(0, subjectCount), warnings, { subject: true });
   if (!auxiliary && (Object.hasOwn(AUXILIARIES, tokens[0]) || Object.hasOwn(COPULAS, tokens[0]))) {
     auxiliary = tokens.shift(); copula = Object.hasOwn(COPULAS, auxiliary);
