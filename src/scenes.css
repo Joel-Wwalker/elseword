@@ -11,6 +11,7 @@
 .scene-room,.scene-front,.scene-ambient{position:absolute;inset:0;width:100%;height:100%;shape-rendering:crispEdges;pointer-events:none}
 .scene-room{z-index:0}.scene-front{z-index:4}.scene-ambient{z-index:8}
 .scene-sprite{position:absolute;width:16.6666667%;aspect-ratio:1/1;background-size:400% 200%;background-repeat:no-repeat;image-rendering:pixelated;image-rendering:crisp-edges;transform-origin:50% 100%;will-change:transform}
+.scene-face{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden}
 .scene-character-0{z-index:6}.scene-character-1{z-index:2}.scene-prop{position:absolute;width:17.1875%;height:auto;z-index:7;shape-rendering:crispEdges;pointer-events:none;opacity:0;will-change:transform}
 .scene-steam{position:absolute;z-index:5;shape-rendering:crispEdges;pointer-events:none}
 .scene-dialogue-wrap{padding:5px 16px 9px}.scene-dialogue{position:relative;border:3px solid #d6d0dd;background:#08080b;padding:15px 19px 17px;min-height:142px}

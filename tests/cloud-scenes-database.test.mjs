@@ -29,7 +29,7 @@ before(async () => {
     grant execute on function auth.uid() to anon,authenticated;
     insert into auth.users values ('${alice}'),('${bob}'),('${charlie}');
   `);
-  for (const name of ['202611070001_cloud_languages.sql', '202611080001_language_tools.sql', '202611080002_cloud_scenes.sql', '202611090002_scene_draft_references.sql', '202611090003_generation_version.sql']) {
+  for (const name of ['202611070001_cloud_languages.sql', '202611080001_language_tools.sql', '202611080002_cloud_scenes.sql', '202611090002_scene_draft_references.sql', '202611090003_generation_version.sql', '202611090004_scene_expressions.sql']) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
   }
 });
@@ -108,6 +108,25 @@ test('cloud saves preserve missing-reference drafts for repair without treating 
   restored.beats[0].options.object = 'moon';
   const repaired = await save({ id: saved.id, document: restored, version: saved.version });
   assert.deepEqual(compileSceneProject(repaired.document).errors, []);
+});
+
+test('cloud scenes retain optional expressions and reject values outside the face vocabulary', async () => {
+  await asUser(alice);
+  for (const expression of ['auto', 'neutral', 'curious', 'annoyed', 'pleased', 'worried', 'startled']) {
+    const document = fresh();
+    document.beats[0].expression = expression;
+    const saved = await save({ document });
+    assert.equal(saved.document.beats[0].expression, expression);
+    await remove(saved.id, saved.version);
+  }
+  const old = await save({ document: fresh() });
+  assert.equal(Object.hasOwn(old.document.beats[0], 'expression'), false);
+  await remove(old.id, old.version);
+  for (const expression of ['angry', '<img onerror=alert(1)>', '', null, 1, true, {}, []]) {
+    const document = fresh();
+    document.beats[0].expression = expression;
+    await rejected(() => save({ document }));
+  }
 });
 
 test('scene writes retain owner isolation and reject direct writes and anonymous access', async () => {

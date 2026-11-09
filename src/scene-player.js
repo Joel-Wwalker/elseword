@@ -3,6 +3,11 @@ import { renderSceneLine } from './scene-language.js';
 import { getSceneLayout, getEpisodeTiming, sampleSceneLayout, shouldFlipCharacter } from './scene-layout.js';
 import { TextAudio, isAudibleCharacter } from './text-audio.js';
 import { sampleCamera } from './scene-direction.js';
+import { sampleExpressions } from './scene-expressions.js';
+import { resolveCharacterFace } from './character-faces.js';
+import { faceMarkup } from './character-face-renderer.js';
+
+let facePlayerId = 0;
 
 /** Authored grammar changes the speech; the exact original English remains its gloss. */
 export function buildDialogue(scene, language) {
@@ -316,6 +321,7 @@ export class ScenePlayer {
     this.el.viewport.dataset.location = scene.id;
     this.el.viewport.dataset.episode = scene.episodeId;
     this.sprites = [this.el.viewport.querySelector('.scene-character-0'), this.el.viewport.querySelector('.scene-character-1')];
+    this.faceId ??= ++facePlayerId;
     this.prop = this.el.viewport.querySelector('.scene-prop');
     this.ambient = this.el.viewport.querySelector('.scene-ambient');
     this.rainDrops = this.el.viewport.querySelector('.scene-rain-drops');
@@ -611,8 +617,17 @@ export class ScenePlayer {
     const secondPose = alternateEnding && current.line.speaker !== 1 ? 3 : waiting ? 0 : layout.characters[1].reacting ? 3
       : (original && index === 1 || returningBook) && this.cast[1].id === 'kiln' ? 2
       : current.line.speaker === 1 || returningBook ? 1 : 0;
+    const expressions = sampleExpressions({ time: t, start: current.start, speaker: current.line.speaker,
+      expressions: current.line.expressions, reactionTimes: layout.reactionTimes });
     this.sprites.forEach((sprite, i) => {
-      sprite.style.backgroundPosition = `${(i ? secondPose : customerPose) * 100 / 3}% ${this.cast[i].row * 100}%`;
+      sprite.dataset.expression = expressions[i];
+      const pose = i ? secondPose : customerPose, faceKey = `${this.cast[i].id}:${pose}:${expressions[i]}`;
+      if (sprite.faceKey !== faceKey) {
+        sprite.innerHTML = faceMarkup(resolveCharacterFace(this.cast[i].id, pose, expressions[i]),
+          `scene-face-${this.faceId}-${i}`, globalThis.document?.baseURI || import.meta.url);
+        sprite.faceKey = faceKey;
+      }
+      sprite.style.backgroundPosition = `${pose * 100 / 3}% ${this.cast[i].row * 100}%`;
       sprite.style.left = `${layout.characters[i].x / 384 * 100}%`;
       sprite.style.top = `${layout.characters[i].y / 216 * 100}%`;
       const direction = shouldFlipCharacter(this.cast[i].row, i) ? -1 : 1;

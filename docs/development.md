@@ -44,8 +44,14 @@ Use a Supabase project you control. The app needs authentication, PostgreSQL and
 1. `supabase/migrations/202611070001_cloud_languages.sql`
 2. `supabase/migrations/202611080001_language_tools.sql`
 3. `supabase/migrations/202611080002_cloud_scenes.sql`
+4. `supabase/migrations/202611090001_language_catalog.sql`
+5. `supabase/migrations/202611090002_scene_draft_references.sql`
+6. `supabase/migrations/202611090003_generation_version.sql`
+7. `supabase/migrations/202611090004_scene_expressions.sql`
 
 Do not replay an applied migration. Add a new migration for later schema changes. [The database guide](../supabase/README.md) describes ownership, validation, version checks and RPC errors.
+
+Apply new migrations before deploying client code that writes the new fields. The scene-expression migration accepts the optional per-line expression setting while keeping existing version-one scenes valid; it does not rewrite saved documents or change ownership rules.
 
 Copy [`.env.example`](../.env.example) to `.env.local` and fill in:
 
