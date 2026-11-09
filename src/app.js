@@ -1,5 +1,8 @@
+import { verbForm, keyFor } from './sentence-grammar.js';
 import { CORE_VOCAB, PRESETS, createLanguage, generateWord, regenerateLanguage, translateText, composeSentence, validateLanguage, exportCSV, generateNames, applySoundChange, renderWriting } from './engine.js';
 import { translateSentence } from './sentence-translator.js';
+import { restartVocabulary, regenerateGrammarMarkers } from './engine.js';
+import { generationDiagnostics } from './generator-diagnostics.js';
 import { createLanguageGenerator } from './language-generator.js';
 import { WRITING_PRESETS, applyWritingPreset, identifyWritingPreset } from './writing-presets.js';
 import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes } from './scenes.js';
@@ -168,10 +171,11 @@ function renderRules() {
   $('rules-language-name').textContent=lang.name;
   const example=composeSentence({subject:'i',verb:'see',object:'moon',adjective:'big'},lang);
   $('grammar-example').textContent=renderWriting(example.text,lang);$('grammar-example').dir=lang.script.direction;
-  $('grammar-tokens').innerHTML=Array.from(lang.grammar.order).map(slot=>`<span class="token">${escapeHTML(({S:byEnglish('i')?.word,V:byEnglish('see')?.word,O:[byEnglish('big')?.word,byEnglish('moon')?.word][lang.grammar.adjective==='before'?'slice':'reverse']().join(' ')})[slot]??'…')}<small>${({S:'WHO',V:'ACTION',O:'WHAT'})[slot]}</small></span>`).join('');
+  $('grammar-tokens').innerHTML=Array.from(lang.grammar.order).map(slot=>`<span class="token">${escapeHTML(example.slots[slot]??'…')}<small>${({S:'WHO',V:'ACTION',O:'WHAT'})[slot]}</small></span>`).join('');
   if(soundDraft){for(const [id,value] of Object.entries(soundDraft.fields))$(id).value=value;document.querySelectorAll('.pattern-options input').forEach(input=>input.checked=soundDraft.patterns.includes(input.value));}
   for(const [id,draft] of Object.entries(grammarDraft)){if(lang.grammar[draft.key]===draft.base)$(id).value=draft.value;else{delete grammarDraft[id];delete rulesErrors.grammar[id];}}
   displayRulesErrors('sounds',rulesErrors.sounds);displayRulesErrors('grammar',rulesErrors.grammar);
+  renderGenerationStatus();
 }
 const rulesFields={sounds:['consonants','vowels','patterns','min-syllables','max-syllables','language-seed'],grammar:['word-order','adjective-order','grammar-plural','grammar-past','grammar-future','grammar-negative','grammar-question']};
 function displayRulesErrors(group, errors, {focus=false}={}) {
@@ -190,6 +194,44 @@ function displayRulesErrors(group, errors, {focus=false}={}) {
   }
   if(focus&&messages.length){const target=first??summary;target.closest('details')?.setAttribute('open','');(target.querySelector('input')??target).focus();}
 }
+function renderGenerationStatus() {
+  const report=generationDiagnostics(language());
+  const capacity=report.capacity===null?'':`These sound rules allow ${report.capacity.toLocaleString()} distinct root spellings. Kept and derived words can differ. `;
+  $('generation-status').textContent=capacity+(report.collisions.length?`${report.sharedMeanings} meanings share ${report.collisions.length} spellings. Linked verb forms are excluded.`:'');
+  $('generation-status').hidden=!$('generation-status').textContent;
+  const incompatible=report.incompatibleMarkers;
+  $('marker-status').textContent=incompatible.length?`These markers use sounds outside the current inventory: ${incompatible.join(', ')}. Keep them if intentional, or generate replacements.`:'';
+  $('marker-status').hidden=!incompatible.length;
+}
+function generateVocabulary({restart=false}={}) {
+  try {
+    const snapshot=JSON.stringify(language());
+    const next=restart?restartVocabulary(language()):regenerateLanguage(language());
+    const report=generationDiagnostics(next);
+    const apply=()=>{
+      if(JSON.stringify(language())!==snapshot){$('modal-error').textContent='This language changed. Close this dialog and try again.';return;}
+      if(commit(next,restart?'Starting vocabulary restored. Kept words are unchanged.':'Vocabulary generated. Kept words are unchanged.')){
+        if($('studio-dialog').open)closeDialog();
+        playGenerated($('sound-preview').textContent);
+      }
+    };
+    if(!restart&&!report.collisions.length){apply();return;}
+    const examples=report.collisions.slice(0,3).map(group=>`<li><strong>${escapeHTML(group.word)}</strong>: ${group.meanings.slice(0,5).map(escapeHTML).join(', ')}${group.meanings.length>5?'…':''}</li>`).join('');
+    const repeated=report.collisions.length?`<p>${report.sharedMeanings} meanings would share ${report.collisions.length} spellings.${report.capacity===null?'':` These sound rules allow ${report.capacity.toLocaleString()} distinct root spellings. Kept and derived words can differ.`} You can keep these homonyms or cancel and add more sounds.</p><ul>${examples}</ul>`:'';
+    openDialog(restart?'Restart vocabulary from seed?':'Some words share a spelling',`<p class="dialog-intro">${restart?'Recreate the starting word choices using the saved seed and sound settings. Kept words, grammar and dictionary entries stay in place.':'Review the repeated spellings before replacing your vocabulary.'} Undo is available.</p>${repeated}`,`<button class="secondary-button" data-close>Cancel</button><button class="primary-button" id="confirm-vocabulary">${report.collisions.length?'Use these words':'Restart vocabulary'}</button>`);
+    $('confirm-vocabulary').onclick=apply;
+  }catch(error){notify(error.message);}
+}
+function regenerateMarkersDialog() {
+  try {
+    const snapshot=JSON.stringify(language()), next=regenerateGrammarMarkers(language());
+    openDialog('Generate grammar markers?',`<p class="dialog-intro">Replace the five markers with short forms using the current sounds. Linked plural forms will update; kept spellings stay unchanged. Undo is available.</p><ul>${['plural','past','future','negative','question'].map(key=>`<li>${key}: ${escapeHTML(language().grammar[key])||'(empty)'} → ${escapeHTML(next.grammar[key])}</li>`).join('')}</ul>`,`<button class="secondary-button" data-close>Cancel</button><button class="primary-button" id="confirm-markers">Use these markers</button>`);
+    $('confirm-markers').onclick=()=>{
+      if(JSON.stringify(language())!==snapshot){$('modal-error').textContent='This language changed. Close this dialog and try again.';return;}
+      if(commit(next,'Grammar markers generated. Undo is available.'))closeDialog();
+    };
+  }catch(error){notify(error.message);}
+}
 function applySounds() {
   const next=clone(language());next.sounds={...next.sounds,consonants:$('consonants').value.trim().split(/\s+/).filter(Boolean),vowels:$('vowels').value.trim().split(/\s+/).filter(Boolean),patterns:[...document.querySelectorAll('.pattern-options input:checked')].map(input=>input.value),minSyllables:Number($('min-syllables').value),maxSyllables:Number($('max-syllables').value)};next.seed=$('language-seed').value.trim();
   const result=validateRulesEdit(language(),{sounds:next.sounds,seed:next.seed});rulesErrors.sounds=result.errors;
@@ -206,7 +248,7 @@ function rememberRulesDraft(target) {
 }
 function renderSentenceSelectors() {
   const lang=language();
-  const sets={subject:lang.words.filter(w=>['pronoun','noun'].includes(w.pos)),verb:lang.words.filter(w=>w.pos==='verb'),object:lang.words.filter(w=>w.pos==='noun'),adjective:lang.words.filter(w=>w.pos==='adjective')};
+  const sets={subject:lang.words.filter(w=>['pronoun','noun'].includes(w.pos)),verb:lang.words.filter(w=>w.pos==='verb' && (verbForm(lang,w.english)?.root ?? keyFor(w.english))===keyFor(w.english)),object:lang.words.filter(w=>w.pos==='noun'),adjective:lang.words.filter(w=>w.pos==='adjective')};
   const defaults={subject:'i',verb:'see',object:'moon',adjective:'big'};
   for(const [kind,words] of Object.entries(sets)){
     const control=$(`sentence-${kind}`),previous=control.value;
@@ -222,7 +264,9 @@ function renderSentence({sound=false}={}) {
   const lang=language();const result=composeSentence(sentenceOptions(),lang);sentenceText=renderWriting(result.text,lang);
   $('sentence-language-label').textContent=`${lang.name.toUpperCase()} · ${lang.grammar.order}`;
   $('sentence-result').textContent=sentenceText;$('sentence-result').dir=lang.script.direction;
-  $('sentence-english').textContent=result.english;
+  $('sentence-english').textContent=result.error||result.english;
+  $('sentence-english').setAttribute('aria-live','polite');
+  $('copy-sentence').disabled=!sentenceText;
   $('sentence-tokens').innerHTML=result.tokens.map(token=>`<span class="token">${escapeHTML(token.text)}</span>`).join('');
   if(sound)playGenerated(sentenceText);
 }
@@ -399,7 +443,9 @@ $('prev-page').onclick=()=>{page--;renderDictionary();};$('next-page').onclick=(
 $('export-csv').onclick=()=>download(exportCSV(language()),`${filename()}-dictionary.csv`,'text/csv;charset=utf-8');
 $('generate-names').onclick=()=>{namesRoll++;renderNames({sound:true});};$('name-kind').onchange=()=>renderNames({sound:true});
 $('apply-sounds').onclick=applySounds;
-$('regenerate').onclick=()=>{try{if(commit(regenerateLanguage(language()),'Vocabulary generated. Kept words are unchanged.'))playGenerated($('sound-preview').textContent);}catch(error){notify(error.message);}};
+$('regenerate').onclick=()=>generateVocabulary();
+$('restart-vocabulary').onclick=()=>generateVocabulary({restart:true});
+$('regenerate-markers').onclick=regenerateMarkersDialog;
 for(const [id,key] of [['word-order','order'],['adjective-order','adjective'],...['plural','past','future','negative','question'].map(key=>[`grammar-${key}`,key])])$(id).onchange=event=>{
   const value=event.target.value.trim(),result=validateRulesEdit(language(),{grammar:{...language().grammar,[key]:value}},id);
   delete rulesErrors.grammar[id];

@@ -1,4 +1,5 @@
-import { createLanguage, regenerateLanguage, validateLanguage, PRESETS } from './engine.js';
+import { createLanguage, generateGrammarMarkers, regenerateLanguage, validateLanguage, PRESETS } from './engine.js';
+import { incompatibleMarkers } from './generator-diagnostics.js';
 import { validateCloudConfig } from './cloud-service.js';
 
 export function languageFromBlueprint(value) {
@@ -9,6 +10,11 @@ export function languageFromBlueprint(value) {
   const base = createLanguage({name:value.name, seed:value.seed, preset:value.preset});
   base.sounds = structuredClone(value.sounds);
   base.grammar = structuredClone(value.grammar);
+  // Validate before diagnostics; the RPC response is untrusted input. Only new
+  // catalog copies are repaired. Saved languages keep their chosen markers.
+  const valid = validateLanguage(base);
+  const invalid = incompatibleMarkers(valid);
+  Object.assign(base.grammar, generateGrammarMarkers(valid, invalid));
   base.words.forEach(word => { word.locked = false; });
   // A catalog seed always expands with the same first vocabulary revision.
   return validateLanguage(regenerateLanguage(base));

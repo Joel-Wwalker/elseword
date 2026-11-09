@@ -16,6 +16,9 @@ selection. It returns one JSON object:
 
 The browser expands the selected blueprint into a normal language document with
 the existing deterministic vocabulary engine. All starting words are editable.
+During expansion, markers that use sounds outside the recipe's inventory are
+replaced with deterministic short forms from that inventory. Compatible markers
+are retained. This affects new copies only; saved languages retain their markers.
 After creation, editing, local backups and cloud saves use the same document
 format as manually created languages. Saving a language retains its actual words,
 so it does not depend on another catalog lookup.

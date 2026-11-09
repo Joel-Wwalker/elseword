@@ -1,5 +1,7 @@
 import { CORE_VOCAB } from './vocabulary.js';
 import { RUNE_GLYPHS } from './writing-presets.js';
+import { clauseFromSelections, clauseSyntax, englishSentence, entryFor, pluralEntry } from './sentence-grammar.js';
+import { literal, token, join, renderNode } from './sentence-syntax.js';
 export { CORE_VOCAB };
 
 const preset = (id, name, description, consonants, vowels, patterns, minSyllables = 1, maxSyllables = 3) => Object.freeze({
@@ -353,6 +355,7 @@ export function createLanguage(options = {}) {
   const name = textField(options.name, 'Language name', 60, { fallback: 'Luma', empty: false });
   const seed = textField(typeof options.seed === 'number' ? String(options.seed) : options.seed, 'Seed', 128, { fallback: 'luma', empty: false });
   const language = { version: 2, id: `lang-${hash(`${seed}|${name}|${selected.id}`).toString(36)}`, name, seed, preset: selected.id, sounds: clone(selected.sounds), grammar: clone(DEFAULT_GRAMMAR), script: clone(DEFAULT_SCRIPT), words: [], phrases: [], revision: 0 };
+  Object.assign(language.grammar, generateGrammarMarkers(language));
   const anchors = selected.id === 'soft' ? { one: 'na', bread: 'poma', please: 'li' } : {};
   const used = new Set(Object.values(anchors));
   language.words = CORE_VOCAB.map((entry) => {
@@ -363,19 +366,51 @@ export function createLanguage(options = {}) {
   return validateLanguage(linkCommonInflections(language));
 }
 
-export function regenerateLanguage(language) {
+/** Short markers use the inventory; whole-word restrictions do not constrain affixes. */
+export function generateGrammarMarkers(language, replace = ['plural', 'past', 'future', 'negative', 'question']) {
+  const sounds = normalizeSounds(language.sounds);
+  const markerLanguage = { ...language, sounds: { ...sounds, rules: undefined, minSyllables: 1, maxSyllables: 1 } };
+  const markers = {}, used = new Set(['plural', 'past', 'future', 'negative', 'question'].filter(key => !replace.includes(key)).map(key => language.grammar[key]).filter(Boolean));
+  for (const key of replace) {
+    let value = sounds.vowels[0];
+    for (let attempt = 0; attempt < 64; attempt++) {
+      const candidate = generateWord(markerLanguage, key, `grammar:${attempt}`);
+      if (charLength(candidate) > 12) continue;
+      value = candidate;
+      if (!used.has(value)) break;
+    }
+    markers[key] = value;
+    used.add(value);
+  }
+  return markers;
+}
+
+export function regenerateGrammarMarkers(language) {
+  const next = validateLanguage(language);
+  Object.assign(next.grammar, generateGrammarMarkers(next));
+  next.revision++;
+  return validateLanguage(next);
+}
+
+function regenerateVocabulary(language, restart) {
   const next = validateLanguage(language);
   next.sounds = normalizeSounds(next.sounds);
   next.revision = (next.revision ?? 0) + 1;
   const used = new Set(next.words.filter((word) => word.locked).map((word) => normalizeKey(word.word)));
   next.words = next.words.map((entry) => {
-    if (entry.locked || entry.family) return entry;
-    const word = generateDistinct(next, entry.english, next.revision, used);
+    if (entry.locked || (entry.family && !restart)) return entry;
+    const word = generateDistinct(next, entry.english, restart ? 0 : next.revision, used);
     used.add(normalizeKey(word));
-    return { ...entry, word };
+    // Initial creation reserves a candidate for every entry before linking
+    // inflections. Replay those reservations to recover the same root words.
+    return entry.family ? entry : { ...entry, word };
   });
   return validateLanguage(next);
 }
+
+export const regenerateLanguage = language => regenerateVocabulary(language, false);
+/** Reset the generation salt only; kept words, grammar and other edits survive. */
+export const restartVocabulary = language => regenerateVocabulary(language, true);
 
 const tokenize = (value) => String(value ?? '').normalize('NFC').match(/[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*|\s+|[^\p{L}\p{M}\p{N}\s]/gu) ?? [];
 const isLexical = (value) => /^[\p{L}\p{M}\p{N}]/u.test(value);
@@ -420,69 +455,28 @@ export function translateText(text, language) {
   return { text: tokens.map((token) => token.text).join(''), tokens, unknown };
 }
 
-const ENGLISH_PLURALS = Object.freeze({ child: 'children', person: 'people', leaf: 'leaves', fish: 'fish', sheep: 'sheep', mouse: 'mice', foot: 'feet', tooth: 'teeth', man: 'men', woman: 'women' });
-const ENGLISH_PAST = Object.freeze({ be: 'was', have: 'had', do: 'did', eat: 'ate', drink: 'drank', buy: 'bought', sell: 'sold', give: 'gave', take: 'took', go: 'went', come: 'came', see: 'saw', hear: 'heard', know: 'knew', speak: 'spoke', find: 'found', read: 'read', write: 'wrote', sleep: 'slept', make: 'made', pay: 'paid', say: 'said', run: 'ran', stop: 'stopped' });
-const ENGLISH_LEMMAS = Object.freeze({ is: 'be', are: 'be', has: 'have', needs: 'need', coming: 'come', said: 'say', stops: 'stop', does: 'do' });
-const MASS_OR_TIME = new Set('bread water tea coffee milk soup rice fruit cheese fish salt sugar sleep rain time work today tomorrow yesterday morning night day home'.split(' '));
-const ALREADY_PLURAL = new Set(['books', 'tickets', 'coins', 'stars', 'children', 'people']);
-const capitalize = (text) => text ? Array.from(text)[0].toLocaleUpperCase('en-US') + text.slice(Array.from(text)[0].length) : '';
-
-function englishPlural(noun) {
-  if (ALREADY_PLURAL.has(noun)) return noun;
-  if (ENGLISH_PLURALS[noun]) return ENGLISH_PLURALS[noun];
-  if (/[^aeiou]y$/iu.test(noun)) return noun.slice(0, -1) + 'ies';
-  return noun + (/(s|x|z|ch|sh)$/iu.test(noun) ? 'es' : 's');
-}
-
-function englishReference({ subject, verb, object, adjective, ...options }, language) {
-  const base = ENGLISH_LEMMAS[verb] ?? verb;
-  const subjectText = subject === 'i' ? 'I' : subject;
-  const thirdPerson = subject && !['i', 'you', 'we', 'they'].includes(subject) && !ALREADY_PLURAL.has(subject);
-  const objectEntry = (language?.words ?? []).find((entry) => entry.english === object);
-  let objectText = options.plural && object ? englishPlural(object) : object;
-  objectText = [adjective, objectText].filter(Boolean).join(' ');
-  if (object && !options.plural && objectEntry?.pos === 'noun' && !MASS_OR_TIME.has(object) && !ALREADY_PLURAL.has(object)) objectText = `${/^[aeiou]/iu.test(objectText) ? 'an' : 'a'} ${objectText}`;
-  let auxiliary = '';
-  let inflected = base;
-  if (options.tense === 'future') auxiliary = 'will';
-  else if (base === 'be') {
-    auxiliary = options.tense === 'past' ? (['you', 'we', 'they'].includes(subject) ? 'were' : 'was') : subject === 'i' ? 'am' : ['you', 'we', 'they'].includes(subject) ? 'are' : 'is';
-    inflected = '';
-  } else if (options.negative || options.question) auxiliary = options.tense === 'past' ? 'did' : thirdPerson ? 'does' : 'do';
-  else if (options.tense === 'past') inflected = ENGLISH_PAST[base] ?? (base.endsWith('e') ? `${base}d` : /[^aeiou]y$/iu.test(base) ? `${base.slice(0, -1)}ied` : `${base}ed`);
-  else if (thirdPerson) inflected = base === 'have' ? 'has' : base === 'do' ? 'does' : englishPlural(base);
-  const tail = [options.negative ? 'not' : '', inflected, objectText];
-  const parts = options.question && auxiliary ? [auxiliary, subjectText, ...tail] : [subjectText, auxiliary, ...tail];
-  const text = parts.filter(Boolean).join(' ');
-  return text ? capitalize(text) + (options.question ? '?' : '.') : '';
-}
-
-/** Basic particles and an object plural suffix; this is not a natural-language translator. */
+/** Render a supported structured clause without changing the saved dictionary. */
 export function composeSentence(options = {}, language) {
-  const grammar = grammarFor(language);
-  const sourceKey = (value) => {
-    const text = String(value ?? '').trim();
-    return (language?.words ?? []).find((entry) => entry.id === text)?.english ?? text;
-  };
-  const subjects = sourceKey(options.subject);
-  const verbs = sourceKey(options.verb);
-  const objects = sourceKey(options.object);
-  const adjectives = sourceKey(options.adjective);
-  const lookup = (value) => translateText(value, language).text;
-  const subject = lookup(subjects);
-  const verb = lookup(verbs);
-  const adjective = lookup(adjectives);
-  const noun = lookup(objects) + (options.plural && objects ? grammar.plural : '');
-  const object = (grammar.adjective === 'after' ? [noun, adjective] : [adjective, noun]).filter(Boolean).join(' ');
-  const tense = options.tense === 'past' ? grammar.past : options.tense === 'future' ? grammar.future : '';
-  const verbPhrase = [options.negative ? grammar.negative : '', tense, verb].filter(Boolean).join(' ');
-  const slots = { S: subject, V: verbPhrase, O: object };
-  const body = Array.from(grammar.order).map((slot) => slots[slot]).filter(Boolean);
-  if (options.question && grammar.question) body.push(grammar.question);
-  const text = body.length ? body.join(' ') + (options.question ? '?' : '.') : '';
-  const english = englishReference({ ...options, subject: normalizeKey(subjects), verb: normalizeKey(verbs), object: normalizeKey(objects), adjective: normalizeKey(adjectives) }, language);
-  const tokens = body.map((value) => ({ type: 'word', source: value, text: value, known: !value.includes('⟦') }));
-  return { text, english, tokens };
+  try {
+    const grammar = grammarFor(language), clause = clauseFromSelections(options, language), syntax = clauseSyntax(clause);
+    const lookup = value => {
+      const word = entryFor(language, value);
+      return token(word?.word ?? `⟦${value}⟧`, { kind: 'word', key: value, wordId: word?.id, known: Boolean(word) });
+    };
+    const pluralLookup = node => {
+      const word = pluralEntry(language, node.head.key, node.surface);
+      return word ? token(word.word, { kind: 'word', key: node.head.key, wordId: word.id, known: true }) : null;
+    };
+    const rendered = renderNode(syntax, grammar, lookup, pluralLookup);
+    const slots = {
+      S: renderNode(syntax.subject, grammar, lookup, pluralLookup).text,
+      V: join([literal(clause.negative ? grammar.negative : ''), literal(clause.tense === 'past' ? grammar.past : clause.tense === 'future' ? grammar.future : ''), lookup(clause.verb)]).text,
+      O: renderNode(syntax.object, grammar, lookup, pluralLookup).text,
+    };
+    return { text: rendered.text + (clause.question ? '?' : '.'), english: englishSentence(clause), tokens: rendered.tokens, slots, error: '' };
+  } catch (error) {
+    return { text: '', english: '', tokens: [], slots: {}, error: error.message };
+  }
 }
 
 export function renderWriting(text, language) {

@@ -188,7 +188,7 @@ test('conditional sound previews match commits, preserve kept forms and recomput
     const result = preview(language, 'm', 'n', condition);
     const next = requireTool('changeSounds')(language, 'm', 'n', condition);
     assert.equal(find(next, 'book').word, expected);
-    assert.equal(find(next, 'books').word, expected + 'en');
+    assert.equal(find(next, 'books').word, expected + language.grammar.plural);
     assert.equal(find(next, 'sun').word, 'mama');
     assert.equal(JSON.stringify(language), before);
     for (const change of result.changes) assert.equal(next.words.find((entry) => entry.id === change.id).word, change.after);
