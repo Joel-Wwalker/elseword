@@ -44,6 +44,8 @@ textAudio.subscribe(({enabled,supported,ready}) => {
   button.title=!supported?'This browser does not support text sounds.':enabled&&!ready?'Click to start text sounds.':enabled?'Mute text sounds across the studio.':'Enable text sounds across the studio.';
 });
 $('text-sound-toggle').onclick=()=>{textAudio.setEnabled(!(textAudio.enabled&&textAudio.ready));if(textAudio.enabled)void textAudio.unlock();};
+// Try autoplay without delaying startup; blocked browsers retry on a gesture.
+void textAudio.unlock();
 let project = loadProject(storage);
 let vocabularyUpdated = false;
 project.languages = project.languages.map(item => {
