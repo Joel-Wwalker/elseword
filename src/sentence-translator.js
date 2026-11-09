@@ -1,45 +1,23 @@
 import { generateWord, validateLanguage } from './engine.js';
+import { PRONOUNS as SUBJECTS, keyFor as key, entryFor as entry, verbForm, knownNounForm, pluralEntry, clauseError, clauseSyntax } from './sentence-grammar.js';
+import { token, renderNode } from './sentence-syntax.js';
 
-const SUBJECTS = new Set(['i', 'you', 'he', 'she', 'it', 'we', 'they', 'this', 'that']);
 const OBJECT_PRONOUNS = { me: 'i', him: 'he', her: 'she', us: 'we', them: 'they' };
 const ARTICLES = new Set(['a', 'an', 'the']);
 const COPULAS = { am: 'present', is: 'present', are: 'present', was: 'past', were: 'past' };
 const AUXILIARIES = { do: 'present', does: 'present', did: 'past', will: 'future' };
-const IRREGULAR_PAST = { had: 'have', ate: 'eat', drank: 'drink', bought: 'buy', sold: 'sell', gave: 'give', took: 'take', went: 'go', came: 'come', saw: 'see', heard: 'hear', knew: 'know', spoke: 'speak', found: 'find', wrote: 'write', slept: 'sleep', made: 'make', paid: 'pay', said: 'say', ran: 'run', met: 'meet', shat: 'shit' };
-const IRREGULAR_PLURALS = { children: 'child', people: 'person', leaves: 'leaf', mice: 'mouse', feet: 'foot', teeth: 'tooth', men: 'man', women: 'woman' };
 const COMMON_ADJECTIVES = new Set('red blue green yellow black white purple orange pink gray grey tall short young hungry thirsty beautiful strange brave clever angry fucking shitty damn goddamn crappy'.split(' '));
 const BLOCKED = new Set('and or but because if unless although while who what where when why how which whose to from with without in on at under over into through for of can could may might must should would shall than as very too only every each any all some more most'.split(' '));
 const CONTRACTIONS = { "don't": 'do not', "doesn't": 'does not', "didn't": 'did not', "won't": 'will not', "isn't": 'is not', "aren't": 'are not', "wasn't": 'was not', "weren't": 'were not', "i'm": 'i am', "you're": 'you are', "we're": 'we are', "they're": 'they are' };
-const INTRANSITIVE = new Set(['go', 'come', 'wait', 'sleep', 'work', 'walk', 'run', 'stop']);
-const SWEAR_VERBS = new Set(['fuck', 'shit', 'piss']);
-const FIXED_EXPRESSIONS = new Set(['shit', 'fuck', 'fuck you', 'damn it', 'bullshit', 'holy shit']);
-const key = value => value.toLocaleLowerCase('en-US');
+const FIXED_EXPRESSIONS = new Set(['shit', 'fuck', 'fuck you', 'damn it', 'bullshit', 'holy shit', 'hello', 'goodbye', 'thank you', 'sorry', 'excuse me', 'welcome']);
 
 function fail(message) { throw new Error(message); }
-function entry(language, english) { return language.words.find(word => key(word.english) === english); }
 function adjective(language, english) { return entry(language, english)?.pos === 'adjective' || COMMON_ADJECTIVES.has(english); }
-function verbRoot(language, word) {
-  const knownVerb = candidate => entry(language, candidate)?.pos === 'verb' || SWEAR_VERBS.has(candidate);
-  if (word === 'has') return { root: 'have', tense: 'present' };
-  if (Object.hasOwn(IRREGULAR_PAST, word) && knownVerb(IRREGULAR_PAST[word])) return { root: IRREGULAR_PAST[word], tense: 'past' };
-  if (knownVerb(word) && !['coming', 'asked', 'needs', 'stops', 'does'].includes(word)) return { root: word, tense: 'present' };
-  const pastCandidates = word.endsWith('ied') ? [word.slice(0, -3) + 'y'] : word.endsWith('ed') ? [word.slice(0, -2), word.slice(0, -1), /([a-z])\1ed$/.test(word) ? word.slice(0, -3) : ''] : [];
-  const past = pastCandidates.filter(knownVerb);
-  if (new Set(past).size === 1) return { root: past[0], tense: 'past' };
-  const presentCandidates = word.endsWith('ies') ? [word.slice(0, -3) + 'y'] : [word.endsWith('es') ? word.slice(0, -2) : '', word.endsWith('s') ? word.slice(0, -1) : ''];
-  const present = presentCandidates.filter(knownVerb);
-  if (new Set(present).size === 1) return { root: present[0], tense: 'present' };
-  return null;
-}
 
 function noun(language, surface, warnings) {
   const existing = entry(language, surface);
-  if (existing?.family?.kind === 'plural') {
-    const root = language.words.find(word => word.id === existing.family.rootId);
-    if (root?.pos === 'noun') return { root: key(root.english), plural: true, surface };
-  }
-  if (Object.hasOwn(IRREGULAR_PLURALS, surface)) return { root: IRREGULAR_PLURALS[surface], plural: true, surface };
-  if (existing?.pos === 'noun') return { root: surface, plural: false, surface };
+  const known = knownNounForm(language, surface);
+  if (known) return known;
   if (existing) fail(`“${surface}” is not a noun in this dictionary.`);
   if (COMMON_ADJECTIVES.has(surface) || surface.endsWith('ly')) fail(`“${surface}” looks like an adjective or adverb. Use a noun, or add it to the dictionary as a noun first.`);
   if (surface.endsWith('ing') || surface.endsWith('ed')) fail(`“${surface}” could be a noun or a verb form. Use a simpler noun phrase.`);
@@ -74,8 +52,9 @@ function phrase(language, tokens, warnings, { subject = false, predicate = false
   const article = ARTICLES.has(words[0]) ? words.shift() : '';
   let modifier = '';
   if (words.length === 2 && adjective(language, words[0])) modifier = words.shift();
-  if (words.length !== 1 || (subject && !article && !entry(language, words[0]))) fail('Use a pronoun or a clear noun phrase, such as “the dragon” or “a red apple”.');
+  if (words.length !== 1) fail('Use a pronoun or a clear noun phrase, such as “the dragon” or “a red apple”.');
   const result = noun(language, words[0], warnings);
+  if (subject && !article && !result.plural && !entry(language, result.root)) fail('Use an article before an unfamiliar singular subject, such as “the dragon”.');
   if (['a', 'an'].includes(article) && result.plural) fail('Use a singular noun after “a” or “an”.');
   return { ...result, article, modifier };
 }
@@ -109,8 +88,8 @@ function parse(language, english, warnings) {
   if (copula) verb = 'be';
   else {
     const surface = tokens.shift() ?? '';
-    const form = verbRoot(language, surface);
-    if (!form) fail('Use a known action verb, such as want, see, eat, buy, walk or sleep.');
+    const form = verbForm(language, surface);
+    if (!form || surface === 'coming') fail('Use a known action verb, such as want, see, eat, buy, walk or sleep.');
     if (auxiliary && form.root !== surface) fail('Use the base verb after do, does, did or will.');
     if (!auxiliary && surface === 'read') fail('“Read” can be present or past. Use “do read” or “did read” to choose the tense.');
     verb = form.root;
@@ -122,9 +101,8 @@ function parse(language, english, warnings) {
   }
   if (tokens.includes('not')) fail('Put “not” immediately after the auxiliary verb.');
   const object = tokens.length ? phrase(language, tokens, warnings, { predicate: copula }) : null;
-  if (copula && !object) fail('A sentence with “be” needs a noun or adjective.');
-  if (!copula && !object && !INTRANSITIVE.has(verb) && !SWEAR_VERBS.has(verb)) fail('Add an object after this verb.');
-  if (object && INTRANSITIVE.has(verb)) fail('This verb only supports a sentence without an object. Prepositional phrases are not supported yet.');
+  const error = clauseError({ verb, object });
+  if (error) fail(error);
   return { subject, verb, object, question, tense, negative, punctuation };
 }
 
@@ -152,34 +130,22 @@ export function translateSentence(source, english) {
   const original = validateLanguage(source), language = structuredClone(original), addedWords = [], warnings = [];
   try {
     const parsed = parse(language, english, warnings), grammar = language.grammar;
-    const lookup = (meaning, pos) => addEntry(language, meaning, pos, addedWords).word;
+    const lookup = (meaning, pos) => {
+      const word = addEntry(language, meaning, pos, addedWords);
+      return token(word.word, { kind: 'word', key: meaning, wordId: word.id });
+    };
     if (parsed.expression) {
-      const text = lookup(parsed.expression, 'particle') + parsed.punctuation;
+      const text = lookup(parsed.expression, 'particle').text + parsed.punctuation;
       if (parsed.expression.includes(' ')) warnings.push('Translated as a fixed expression.');
       if (addedWords.length) language.revision++;
       return { language: validateLanguage(language), text, addedWords: structuredClone(addedWords), warnings, supported: true };
     }
-    const renderPhrase = part => {
-      if (!part) return '';
-      if (part.pronoun) return lookup(part.root, 'pronoun');
-      if (part.adjectiveOnly) return lookup(part.root, 'adjective');
-      let nounText = lookup(part.root, 'noun');
-      if (part.plural) {
-        const linked = entry(language, part.surface);
-        nounText = linked?.family?.kind === 'plural' ? linked.word : nounText + grammar.plural;
-      }
-      const modifier = part.modifier ? lookup(part.modifier, 'adjective') : '';
-      const nounPhrase = (grammar.adjective === 'after' ? [nounText, modifier] : [modifier, nounText]).filter(Boolean).join(' ');
-      return [part.article ? lookup(part.article === 'an' ? 'a' : part.article, 'particle') : '', nounPhrase].filter(Boolean).join(' ');
+    const pluralLookup = node => {
+      const word = pluralEntry(language, node.head.key, node.surface);
+      return word ? token(word.word, { kind: 'word', key: node.head.key, wordId: word.id }) : null;
     };
-    const slots = {
-      S: renderPhrase(parsed.subject),
-      V: [parsed.negative ? grammar.negative : '', parsed.tense === 'past' ? grammar.past : parsed.tense === 'future' ? grammar.future : '', lookup(parsed.verb, 'verb')].filter(Boolean).join(' '),
-      O: renderPhrase(parsed.object),
-    };
-    const parts = [...grammar.order].map(slot => slots[slot]).filter(Boolean);
-    if (parsed.question && grammar.question) parts.push(grammar.question);
-    const text = parts.join(' ') + (parsed.question ? '?' : parsed.punctuation);
+    const rendered = renderNode(clauseSyntax(parsed), grammar, lookup, pluralLookup);
+    const text = rendered.text + (parsed.question ? '?' : parsed.punctuation);
     if (addedWords.length) language.revision++;
     return { language: validateLanguage(language), text, addedWords: structuredClone(addedWords), warnings, supported: true };
   } catch (error) {
