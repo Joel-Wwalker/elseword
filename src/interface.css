@@ -37,6 +37,13 @@ button:disabled { opacity: .45; }
 .project-actions { gap: 8px; }
 .project-actions select { width: 156px; max-width: none; font-size: 14px; padding: 8px 30px 8px 12px; }
 .project-actions .quiet-button { margin-left: 0; font-size: 14px; }
+.project-actions .new-language-button { white-space: nowrap; padding-inline: 12px; }
+.starter-example { margin-top: 12px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.form-error, .form-grid label > .field-error, .field-error { display: block; color: var(--ink); font-size: 14px; line-height: 1.6; margin-block: 10px; }
+.form-error { border-inline-start: 3px solid var(--blue, var(--green)); padding-inline-start: 12px; }
+.pattern-options > .field-error { flex-basis: 100%; }
+.form-error[hidden], .field-error[hidden], .starter-example[hidden] { display: none; }
+[aria-invalid=true] { border-color: var(--blue, var(--green)); outline: 1px solid var(--blue, var(--green)); outline-offset: 2px; }
 .quiet-button, .text-button { font: 14px/1.4 var(--sans); min-height: 44px; padding: 8px 10px; }
 .quiet-button:hover, .text-button:hover { background: var(--surface-hover); }
 .icon-button { min-width: 44px; height: 44px; }

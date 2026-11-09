@@ -156,3 +156,35 @@ dialog::backdrop { background: var(--dialog-backdrop); }
   .brand { font-size: 22px; gap: 8px; }
   .brand svg { width: 19px; height: 19px; }
 }
+
+/* Fit the artwork around readable dialogue while keeping its original proportions. */
+#view-world > .page-heading { padding-block: 20px 16px; }
+.world-layout { row-gap: 16px; }
+.world-main .scene-viewport {
+  width: min(100%, calc(clamp(150px, 26vh, 240px) * 16 / 9));
+  width: min(100%, calc(clamp(150px, 26svh, 240px) * 16 / 9));
+  margin-inline: auto;
+}
+.world-player .scene-translation { font-size: 14px; line-height: 1.6; }
+.world-player .scene-episode { font-size: 13px; }
+.world-player .scene-controls .scene-control, .world-player .scene-episode-next { font-size: 14px; }
+.world-player .scene-toolbar { padding-block: 8px; min-height: 36px; }
+.world-player .scene-dialogue { min-height: 132px; }
+
+@media (max-width: 760px) {
+  .topbar { padding-block: 10px; gap: 8px; min-height: 0; }
+  .project-actions { flex-wrap: wrap; }
+  .project-actions select { min-width: 80px; }
+  .project-actions .new-language-button { font-size: 13px; padding-inline: 9px; gap: 4px; }
+  .project-actions .account-label { display: none; }
+  .project-actions .account-button { width: 44px; justify-content: center; }
+  .studio-nav .nav-tab { min-height: 44px; }
+  #view-world > .page-heading { gap: 10px; padding-block: 16px 12px; }
+  #view-world .maker-entry { gap: 8px; }
+  #view-world .maker-entry .secondary-button, #view-world .maker-entry .text-button { font-size: 13px; }
+  .world-main .scene-viewport {
+    width: min(100%, calc(clamp(120px, 20vh, 180px) * 16 / 9));
+    width: min(100%, calc(clamp(120px, 20svh, 180px) * 16 / 9));
+  }
+  .world-player .scene-dialogue { min-height: 132px; }
+}
