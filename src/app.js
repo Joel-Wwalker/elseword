@@ -1,3 +1,4 @@
+import { verbForm, keyFor } from './sentence-grammar.js';
 import { CORE_VOCAB, PRESETS, createLanguage, generateWord, regenerateLanguage, translateText, composeSentence, validateLanguage, exportCSV, generateNames, applySoundChange, renderWriting } from './engine.js';
 import { translateSentence } from './sentence-translator.js';
 import { restartVocabulary, regenerateGrammarMarkers } from './engine.js';
@@ -160,7 +161,7 @@ function renderRules() {
   $('rules-language-name').textContent=lang.name;
   const example=composeSentence({subject:'i',verb:'see',object:'moon',adjective:'big'},lang);
   $('grammar-example').textContent=renderWriting(example.text,lang);$('grammar-example').dir=lang.script.direction;
-  $('grammar-tokens').innerHTML=Array.from(lang.grammar.order).map(slot=>`<span class="token">${escapeHTML(({S:byEnglish('i')?.word,V:byEnglish('see')?.word,O:[byEnglish('big')?.word,byEnglish('moon')?.word][lang.grammar.adjective==='before'?'slice':'reverse']().join(' ')})[slot]??'…')}<small>${({S:'WHO',V:'ACTION',O:'WHAT'})[slot]}</small></span>`).join('');
+  $('grammar-tokens').innerHTML=Array.from(lang.grammar.order).map(slot=>`<span class="token">${escapeHTML(example.slots[slot]??'…')}<small>${({S:'WHO',V:'ACTION',O:'WHAT'})[slot]}</small></span>`).join('');
   renderGenerationStatus();
 }
 function renderGenerationStatus() {
@@ -207,7 +208,7 @@ function applySounds() {
 }
 function renderSentenceSelectors() {
   const lang=language();
-  const sets={subject:lang.words.filter(w=>['pronoun','noun'].includes(w.pos)),verb:lang.words.filter(w=>w.pos==='verb'),object:lang.words.filter(w=>w.pos==='noun'),adjective:lang.words.filter(w=>w.pos==='adjective')};
+  const sets={subject:lang.words.filter(w=>['pronoun','noun'].includes(w.pos)),verb:lang.words.filter(w=>w.pos==='verb' && (verbForm(lang,w.english)?.root ?? keyFor(w.english))===keyFor(w.english)),object:lang.words.filter(w=>w.pos==='noun'),adjective:lang.words.filter(w=>w.pos==='adjective')};
   const defaults={subject:'i',verb:'see',object:'moon',adjective:'big'};
   for(const [kind,words] of Object.entries(sets)){
     const control=$(`sentence-${kind}`),previous=control.value;
@@ -223,7 +224,9 @@ function renderSentence({sound=false}={}) {
   const lang=language();const result=composeSentence(sentenceOptions(),lang);sentenceText=renderWriting(result.text,lang);
   $('sentence-language-label').textContent=`${lang.name.toUpperCase()} · ${lang.grammar.order}`;
   $('sentence-result').textContent=sentenceText;$('sentence-result').dir=lang.script.direction;
-  $('sentence-english').textContent=result.english;
+  $('sentence-english').textContent=result.error||result.english;
+  $('sentence-english').setAttribute('aria-live','polite');
+  $('copy-sentence').disabled=!sentenceText;
   $('sentence-tokens').innerHTML=result.tokens.map(token=>`<span class="token">${escapeHTML(token.text)}</span>`).join('');
   if(sound)playGenerated(sentenceText);
 }
