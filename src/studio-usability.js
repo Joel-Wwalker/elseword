@@ -15,7 +15,9 @@ export function starterExampleName(language) {
 /** Keep the language validator authoritative while attaching its error to a control. */
 export function validateRulesEdit(source, patch, fallbackField = 'sounds') {
   try {
-    return { language: validateLanguage({ ...source, ...patch }), errors: {} };
+    const language = validateLanguage({ ...source, ...patch });
+    if (patch.sounds && JSON.stringify(language.sounds) !== JSON.stringify(source.sounds)) delete language.generationVersion;
+    return { language, errors: {} };
   } catch (error) {
     const message = error.message;
     const field = fallbackField !== 'sounds' ? fallbackField

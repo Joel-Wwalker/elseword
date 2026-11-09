@@ -147,7 +147,7 @@ test('scene context words edit actual lexical roots; missing roots stay visibly 
 
 test('version-2 roots and legacy linked plural output stay stable', () => {
   api();
-  const language = createLanguage({ name: 'Luma', seed: 'episode-compat', preset: 'soft' });
+  const language = createLanguage({ name: 'Luma', seed: 'episode-compat', preset: 'soft', generationVersion: 1 });
   // Existing documents retain this marker; new languages choose one from their sounds.
   language.grammar.plural = 'en';
   const words = validateLanguage(language).words.slice(0, 220);

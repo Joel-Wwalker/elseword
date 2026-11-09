@@ -25,6 +25,7 @@ before(async () => {
   `);
   await db.exec(await readFile(new URL('../supabase/migrations/202611070001_cloud_languages.sql', import.meta.url), 'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202611080001_language_tools.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202611090003_generation_version.sql', import.meta.url), 'utf8'));
 });
 beforeEach(async () => {
   await db.exec('reset role; truncate public.cloud_languages;');

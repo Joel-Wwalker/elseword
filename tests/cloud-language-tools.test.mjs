@@ -12,7 +12,7 @@ const extensionURL = new URL('../supabase/migrations/202611080001_language_tools
 let db;
 
 function legacyDocument() {
-  const doc = createLanguage({ seed: 'database-tools', name: 'Old kept language' });
+  const doc = createLanguage({ seed: 'database-tools', name: 'Old kept language', generationVersion: 1 });
   doc.grammar = { order: 'SVO', adjective: 'before', plural: 'en', past: 'ta', future: 'va', negative: 'no', question: 'ka' };
   doc.version = 1;
   delete doc.phrases;

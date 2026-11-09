@@ -1,3 +1,5 @@
+import { generationQuality } from './generation-quality.js';
+
 const keyFor = value => String(value ?? '').normalize('NFC').toLocaleLowerCase('en-US');
 export const GRAMMAR_MARKERS = ['plural', 'past', 'future', 'negative', 'question'];
 
@@ -17,7 +19,8 @@ export function incompatibleMarkers(language) {
   return GRAMMAR_MARKERS.filter(key => !usesSoundInventory(language.grammar[key], language.sounds));
 }
 
-function distinctCapacity(sounds, limit = 10000) {
+function distinctCapacity(language, limit = 10000) {
+  const { sounds } = language;
   const combinationsPerSyllable = sounds.patterns.reduce((sum, pattern) => sum + [...pattern].reduce((count, slot) => count * sounds[slot === 'C' ? 'consonants' : 'vowels'].length, 1), 0);
   let combinationUpperBound = 0;
   for (let size = sounds.minSyllables; size <= sounds.maxSyllables; size++) combinationUpperBound += combinationsPerSyllable ** size;
@@ -42,7 +45,10 @@ function distinctCapacity(sounds, limit = 10000) {
       if (allowed(normalized)) spellings.add(keyFor(normalized));
     }
   }
-  return { capacity: spellings.size, combinationUpperBound };
+  const quality = generationQuality(language);
+  const preferred = quality ? [...spellings].filter(quality).length : 0;
+  // Generation falls back to the explicit inventory if no preferred form fits.
+  return { capacity: preferred || spellings.size, combinationUpperBound };
 }
 
 /** Explain actual homonyms, without treating linked verb forms as separate words. */
@@ -56,7 +62,7 @@ export function generationDiagnostics(language) {
     groups.get(key).meanings.push(entry.english);
   }
   const collisions = [...groups.values()].filter(group => group.meanings.length > 1);
-  return { ...distinctCapacity(language.sounds), collisions,
+  return { ...distinctCapacity(language), collisions,
     sharedMeanings: collisions.reduce((total, group) => total + group.meanings.length, 0),
     incompatibleMarkers: incompatibleMarkers(language) };
 }
