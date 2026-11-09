@@ -1,4 +1,4 @@
-# Contributing to Elseword
+# Contributing to Oddtongue
 
 Bug reports, documentation fixes and code contributions are welcome. For a substantial feature or a change to saved data, open an issue first so the intended behavior can be discussed.
 
@@ -19,7 +19,7 @@ Open [localhost:58110](http://localhost:58110/). Rebuild and reload after source
 
 Keep each pull request focused on one problem. Follow the nearby JavaScript and CSS conventions, and avoid unrelated formatting changes. Explain new dependencies or changes to public file formats.
 
-Preserve existing language backups, scene files and browser saves. Some internal names still use `little-languages` for compatibility. Add a new migration for database changes; do not edit the three existing migrations or replay them on a database that already has them.
+Preserve existing language backups, scene files and browser saves. Some internal identifiers still use `elseword` or `little-languages` for compatibility. Add a new migration for database changes; do not edit the three existing migrations or replay them on a database that already has them.
 
 For a behavior change, add or update a test that demonstrates the behavior. Run `npm test` and `npm run build` before submitting. Check interface changes in the browser, including narrow screens and keyboard navigation. If a check cannot be run, say which one and why.
 

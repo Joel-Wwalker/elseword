@@ -1,6 +1,6 @@
 # Architecture
 
-Elseword is a static browser application. Its source uses JavaScript ES modules, HTML and separate CSS files. esbuild bundles the main entry and splits modules loaded on demand. There is no application server in guest mode; `serve.mjs` is a local file server for the built site.
+Oddtongue is a static browser application. Its source uses JavaScript ES modules, HTML and separate CSS files. esbuild bundles the main entry and splits modules loaded on demand. There is no application server in guest mode; `serve.mjs` is a local file server for the built site.
 
 ## Language editing
 
@@ -15,7 +15,7 @@ Elseword is a static browser application. Its source uses JavaScript ES modules,
 | `writing-presets.js` | Defines and applies character mappings. |
 | `storage.js` | Loads, validates and saves the local language workspace, including recovery data. |
 
-An edit changes the current in-memory language, refreshes the affected view and saves the local workspace. Imports pass through validation before becoming local languages. Undo history belongs to the current session. Some storage keys and format identifiers retain the earlier `little-languages` name so existing saves still work.
+An edit changes the current in-memory language, refreshes the affected view and saves the local workspace. Imports pass through validation before becoming local languages. Undo history belongs to the current session. Some storage keys and format identifiers retain the earlier names `elseword` and `little-languages` so existing saves still work.
 
 The sentence builder uses explicit subject, verb, object and modifier choices. Built-in dialogue also carries authored grammatical structure. The free-text gloss only matches dictionary entries; it is a separate path from sentence composition.
 
