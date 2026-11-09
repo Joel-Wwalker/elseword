@@ -230,6 +230,7 @@ export class ScenePlayer {
     this.visible = false;
     this.elapsed = 0;
     this.lastTime = 0;
+    this.reducedAudioLine = null;
     this.destroyed = false;
     this.abort = new AbortController();
     this.container.innerHTML = `<div class="world-player">
@@ -254,7 +255,8 @@ export class ScenePlayer {
     listen(this.el.episodeNext, 'click', () => this.nextEpisode());
     listen(this.el.speed, 'change', () => this.setSpeed(this.el.speed.value));
     listen(this.el.english, 'click', () => this.setEnglish(!this.english));
-    listen(this.el.sound, 'click', () => this.setSound(!this.sound));
+    listen(this.el.sound, 'click', () => this.setSound(!(this.sound && this.textAudio.ready)));
+    listen(this.el.text, 'focusin', () => this.textAudio.stop());
     listen(document, 'visibilitychange', () => {
       this.lastTime = 0;
       if (document.hidden) this.textAudio.stop();
@@ -367,7 +369,7 @@ export class ScenePlayer {
     this.render();
   }
 
-  play() { this.paused = false; this.lastTime = 0; this.syncControls(); }
+  play() { this.paused = false; this.lastTime = 0; this.reducedAudioLine = null; this.syncControls(); }
   pause() { this.paused = true; this.lastTime = 0; this.textAudio?.stop(); this.syncControls(); }
   hasWordFocus() {
     return typeof document !== 'undefined' && document.activeElement && this.el.text.contains(document.activeElement);
@@ -542,11 +544,12 @@ export class ScenePlayer {
     this.el.status.textContent = this.awaitingChoice ? 'YOUR REPLY' : this.paused ? 'SCENE PAUSED' : 'SCENE PLAYING';
     const supported = this.textAudio?.supported !== false;
     const enabled = this.sound && supported;
-    this.el.sound.textContent = enabled ? 'SFX ON' : 'SFX OFF';
-    this.el.sound.setAttribute('aria-label', enabled ? 'Mute text sounds' : 'Enable text sounds');
-    this.el.sound.setAttribute('aria-pressed', String(enabled));
+    const active = enabled && this.textAudio?.ready === true;
+    this.el.sound.textContent = enabled ? (active ? 'SFX ON' : 'Enable sound') : 'SFX OFF';
+    this.el.sound.setAttribute('aria-label', active ? 'Mute text sounds' : 'Enable text sounds');
+    this.el.sound.setAttribute('aria-pressed', String(active));
     this.el.sound.disabled = !supported;
-    this.el.sound.title = supported ? 'Text sound effects' : 'Text sounds are unavailable in this browser';
+    this.el.sound.title = !supported ? 'Text sounds are unavailable in this browser' : enabled && !active ? 'Click to start text sounds.' : 'Text sound effects';
   }
 
   render({ audible = false } = {}) {
@@ -572,10 +575,19 @@ export class ScenePlayer {
     const letters = [...current.text];
     const chars = this.motion.matches || this.revealed ? letters.length
       : Math.min(letters.length, Math.max(0, Math.floor((t - current.start) / 43)));
-    if (audible && !this.motion.matches && !this.revealed && !this.paused && this.visible
+    if (audible && !this.revealed && !this.paused && this.visible
       && !document.hidden && this.sound && this.textAudio?.supported) {
-      for (const character of letters.slice(this.visibleChars, chars)) {
-        if (isAudibleCharacter(character)) this.textAudio.blip(character, speaker.id);
+      if (this.motion.matches) {
+        // Reduced motion keeps text instant, but explicit playback still voices
+        // each line once. Redraws must not restart or truncate its short burst.
+        if (this.reducedAudioLine !== current && this.textAudio.ready) {
+          this.reducedAudioLine = current;
+          this.textAudio.playText(current.text, { voiceId: speaker.id, maxDuration: (current.end - t) / this.speed });
+        }
+      } else {
+        for (const character of letters.slice(this.visibleChars, chars)) {
+          if (isAudibleCharacter(character)) this.textAudio.blip(character, speaker.id);
+        }
       }
     }
     this.visibleChars = chars;
