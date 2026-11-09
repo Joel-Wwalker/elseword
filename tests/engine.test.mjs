@@ -75,7 +75,7 @@ test('structured grammar honors word order, adjective placement and morphology',
   language.grammar.order = 'VSO';
   language.grammar.adjective = 'before';
   assert.equal(composeSentence({ subject: 'i', verb: 'eat', object: 'bread', adjective: 'big', tense: 'future' }, language).text, 'va et mi dor poma.');
-  assert.match(composeSentence({ subject: 'i', verb: 'teleport', object: 'bread' }, language).text, /⟦teleport⟧/u);
+  assert.match(composeSentence({ subject: 'i', verb: 'teleport', object: 'bread' }, language).error, /dictionary/i);
 });
 
 test('writing maps longest Unicode tokens while preserving unmapped text', () => {
