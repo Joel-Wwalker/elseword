@@ -21,6 +21,12 @@
   text-shadow: var(--heading-depth);
 }
 
+.shell .brand img {
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+
 .shell .page-heading h1,
 .shell .scene-maker .sm-header h1 {
   font: 700 34px/1.15 var(--heading-font);
@@ -59,6 +65,7 @@ body dialog .cloud-library-heading h3 {
 
 @media (max-width: 760px) {
   .shell .brand { font-size: 28px; }
+  .shell .brand img { width: 32px; height: 32px; }
   .shell .page-heading h1,
   .shell .scene-maker .sm-header h1 { font-size: 31px; }
   .shell .section-heading h2,
