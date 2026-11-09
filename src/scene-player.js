@@ -2,6 +2,7 @@ import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes, resolveSceneChoi
 import { renderSceneLine } from './scene-language.js';
 import { getSceneLayout, getEpisodeTiming, sampleSceneLayout, shouldFlipCharacter } from './scene-layout.js';
 import { TextAudio, isAudibleCharacter } from './text-audio.js';
+import { sampleCamera } from './scene-direction.js';
 
 /** Authored grammar changes the speech; the exact original English remains its gloss. */
 export function buildDialogue(scene, language) {
@@ -309,7 +310,9 @@ export class ScenePlayer {
     this.el.episode.textContent = `${scene.title} · ${scene.episodeIndex + 1}/${scene.episodeCount}${scene.choice ? ' · 2 replies' : ''}`;
     this.el.conversation.hidden = scene.episodeCount < 2;
     this.el.episodeNext.hidden = scene.episodeCount < 2;
-    this.el.viewport.innerHTML = `${this.room.background}<div class="scene-sprite scene-character-1" aria-hidden="true"></div><div class="scene-sprite scene-character-0" aria-hidden="true"></div>${this.room.foreground}${propSVG(scene.prop)}${scene.animation.type === 'cold-tea' ? steamSVG : ''}${this.room.ambient || ''}`;
+    this.el.viewport.innerHTML = `<div class="scene-shot">${this.room.background}<div class="scene-sprite scene-character-1" aria-hidden="true"></div><div class="scene-sprite scene-character-0" aria-hidden="true"></div>${this.room.foreground}${propSVG(scene.prop)}${scene.animation.type === 'cold-tea' ? steamSVG : ''}${this.room.ambient || ''}<svg class="scene-impact" viewBox="0 0 384 216" aria-hidden="true"></svg></div>`;
+    this.shot = this.el.viewport.querySelector('.scene-shot');
+    this.impact = this.el.viewport.querySelector('.scene-impact');
     this.el.viewport.dataset.location = scene.id;
     this.el.viewport.dataset.episode = scene.episodeId;
     this.sprites = [this.el.viewport.querySelector('.scene-character-0'), this.el.viewport.querySelector('.scene-character-1')];
@@ -601,11 +604,11 @@ export class ScenePlayer {
     const waiting = this.timing.episodeType === 'cold-tea' && t >= this.timing.coolStart;
     const alternateEnding = this.choiceId && this.scene.choice?.options.findIndex(option => option.id === this.choiceId) > 0
       && index === this.dialogue.length - 1;
-    const customerPose = alternateEnding && current.line.speaker !== 0 ? 3 : waiting ? 0 : layout.walking ? (layout.step && this.cast[0].id !== 'kiln' ? 2 : 0)
-      : original && index >= 3 ? 3 : current.line.speaker === 0 ? 1 : 0;
+    const customerPose = alternateEnding && current.line.speaker !== 0 ? 3 : waiting ? 0 : layout.characters[0].reacting ? 3 : layout.walking ? (layout.step && this.cast[0].id !== 'kiln' ? 2 : 0)
+      : current.line.speaker === 0 ? 1 : 0;
     // Kiln alone has an offering pose in column 2; the other atlases use it for walking.
     const returningBook = this.timing.episodeType === 'lost-property' && t >= this.timing.returnStart && t < this.timing.returnStart + 1100;
-    const secondPose = alternateEnding && current.line.speaker !== 1 ? 3 : waiting ? 0 : original && index >= 3 ? 3
+    const secondPose = alternateEnding && current.line.speaker !== 1 ? 3 : waiting ? 0 : layout.characters[1].reacting ? 3
       : (original && index === 1 || returningBook) && this.cast[1].id === 'kiln' ? 2
       : current.line.speaker === 1 || returningBook ? 1 : 0;
     this.sprites.forEach((sprite, i) => {
@@ -613,8 +616,12 @@ export class ScenePlayer {
       sprite.style.left = `${layout.characters[i].x / 384 * 100}%`;
       sprite.style.top = `${layout.characters[i].y / 216 * 100}%`;
       const direction = shouldFlipCharacter(this.cast[i].row, i) ? -1 : 1;
-      sprite.style.transform = `scaleX(${direction * (layout.characters[i].turnScale ?? 1)})`;
+      sprite.style.transform = `rotate(${layout.characters[i].lean ?? 0}deg) scaleX(${direction * (layout.characters[i].turnScale ?? 1)})`;
     });
+    const camera = sampleCamera({ time: t, speaker: current.line.speaker, previousSpeaker: this.dialogue[Math.max(0, index - 1)].line.speaker,
+      lineStart: current.start, impact: layout.impact, reduced });
+    this.shot.style.transform = `translate(${camera.x / 384 * 100}%, ${camera.y / 216 * 100}%) scale(${camera.scale})`;
+    this.impact.innerHTML = layout.effects.map(mark => `<path d="M${mark.x} ${mark.y}h${mark.width}v${mark.height}h-${mark.width}Z" fill="${mark.color}" opacity="${mark.opacity}"/>`).join('');
     this.prop.style.left = `${layout.prop.x / 384 * 100}%`;
     this.prop.style.top = `${layout.prop.y / 216 * 100}%`;
     this.prop.style.width = `${layout.prop.width / 384 * 100}%`;

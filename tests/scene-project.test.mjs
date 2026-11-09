@@ -89,7 +89,7 @@ test('long English captions display every page within the canvas instead of sile
   globalThis.Image = class { width = 1024; height = 512; set src(value) { queueMicrotask(() => this.onload()); } };
   globalThis.document = { baseURI: 'http://localhost/', fonts: { load: async () => {}, ready: Promise.resolve() } };
   const drawn = [];
-  const ctx = { font: '12px monospace', save() {}, restore() {}, translate() {}, scale() {}, setTransform() {}, fillRect() {}, strokeRect() {}, drawImage() {},
+  const ctx = { font: '12px monospace', save() {}, restore() {}, translate() {}, scale() {}, rotate() {}, beginPath() {}, rect() {}, clip() {}, setTransform() {}, fillRect() {}, strokeRect() {}, drawImage() {},
     measureText(value) { const size = parseFloat(this.font); return { width: Array.from(value).reduce((width, char) => width + (/\p{Script=Han}/u.test(char) ? size : size * 0.6), 0) }; },
     fillText(value, x, y) { if (y >= 302 && y < 348) drawn.push(value); assert.ok(y < 348, 'Caption must stay inside its panel'); },
   };

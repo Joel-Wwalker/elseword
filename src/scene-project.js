@@ -3,6 +3,7 @@ import { SCENES, CHARACTERS, getSceneEpisode, resolveSceneChoice } from './scene
 import { renderSceneLine } from './scene-language.js';
 import { getSceneLayout, shouldFlipCharacter } from './scene-layout.js';
 import { isAudibleCharacter } from './text-audio.js';
+import { sampleAction, sampleImpact, sampleCamera } from './scene-direction.js';
 
 export const SCENE_STORAGE_KEY = 'little-languages-sceneprojects-v1';
 export const SCENE_RECOVERY_KEY = `${SCENE_STORAGE_KEY}-recovery`;
@@ -15,7 +16,6 @@ const utf8 = new TextEncoder();
 const points = value => Array.from(value);
 const keyOf = value => String(value ?? '').normalize('NFC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
 const clamp = (value, min = 0, max = 1) => Math.max(min, Math.min(max, value));
-const ease = value => { const p = clamp(value); return p * p * (3 - 2 * p); };
 const oneOf = (value, options, label) => { if (!options.includes(value)) throw new Error(`Choose a valid ${label}.`); return value; };
 const integer = (value, min, max, label) => { if (!Number.isInteger(value) || value < min || value > max) throw new Error(`${label} must be an integer between ${min} and ${max}.`); return value; };
 const object = (value, label) => { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object.`); return value; };
@@ -225,51 +225,77 @@ export function sampleSceneProject(compiled, time, { reduced = false } = {}) {
   const beat = compiled.beats[index], project = compiled.project, layout = getSceneLayout(project.room);
   const actors = layout.positions.map(([x, y], role) => {
     const character = CHARACTERS.find(character => character.id === project.cast[role]);
-    return { id: character.id, x, y, pose: role === beat.speaker && t < beat.speechEnd ? 1 : 0, flip: shouldFlipCharacter(character.row, role) };
+    return { id: character.id, x, y, lean: 0, pose: role === beat.speaker && t < beat.speechEnd ? 1 : 0, flip: shouldFlipCharacter(character.row, role) };
   });
-  const prop = propFrame(project);
+  const prop = propFrame(project), effects = [];
+  let impact = 0;
+  const facing = actor => (CHARACTERS.find(character => character.id === actor.id).row === 0 ? 1 : -1) * (actor.flip ? -1 : 1);
   for (const action of compiled.beats) {
     if (t < action.actionAt || action.action === 'none') continue;
-    const p = clamp((t - action.actionAt) / ACTION_DURATION), smooth = ease(p), actor = actors[action.speaker];
+    const elapsed = t - action.actionAt, motion = sampleAction(action.action, elapsed, { duration: ACTION_DURATION, reduced });
+    const p = motion.progress, actor = actors[action.speaker];
     const role = action.speaker, baseX = layout.positions[role][0];
     if (action.action === 'walk' && !reduced) {
       const target = Math.abs(actor.x - baseX) > 1 ? baseX : baseX + (role ? -6 : 6);
-      actor.x += (target - actor.x) * smooth;
-      if (p < 1) actor.pose = Math.floor((t - action.actionAt) / 140) % 2 ? 2 : 0;
+      actor.x += (target - actor.x) * motion.travel;
+      if (motion.active) actor.pose = Math.floor(elapsed / 140) % 2 ? 2 : 0;
     }
     if (action.action === 'turn' && p >= (reduced ? 0 : 0.5)) actor.flip = !actor.flip;
-    if (action.action === 'gesture' && p < 1) actor.pose = actor.id === 'kiln' ? 2 : 1;
-    if (action.action === 'recoil' && p < 1) {
+    actor.lean += motion.lean * facing(actor);
+    if (action.action === 'gesture' && motion.active) actor.pose = actor.id === 'kiln' ? 2 : 1;
+    if (action.action === 'recoil' && motion.active) {
       actor.pose = 3;
-      if (!reduced) actor.x += (role ? 4 : -4) * Math.sin(p * Math.PI);
+      if (!reduced) actor.x += (role ? 4 : -4) * motion.recoil;
     }
     if (action.action === 'pass' && prop.type !== 'none') {
       const left = prop.slot[0] - prop.shape[0] * prop.scale + 1;
       const right = prop.slot[1] - prop.shape[2] * prop.scale - 1;
       const target = clamp(prop.x + (role ? -8 : 8), left, right);
-      prop.x += (target - prop.x) * (reduced ? 1 : smooth);
-      if (p < 1) actor.pose = actor.id === 'kiln' ? 2 : 1;
+      prop.x += (target - prop.x) * motion.travel;
+      if (motion.active) actor.pose = actor.id === 'kiln' ? 2 : 1;
     }
     if (action.action === 'drop' && prop.type !== 'none') {
       if (prop.mode === 'sky') {
         const targetX = 211 - (prop.shape[0] + prop.shape[2]) * prop.scale / 2;
         const targetY = 175 - prop.shape[3] * prop.scale;
-        prop.x += (targetX - prop.x) * (reduced ? 1 : ease(p * 3));
-        prop.y += (targetY - prop.y) * (reduced ? 1 : ease((p - 1 / 3) * 1.5));
-        if (p >= 1 || reduced) { prop.mode = 'ground'; prop.supportY = 175; prop.slot = [201, 222]; }
+        // Keep the star's horizontal approach followed by its fall into the clear floor slot.
+        prop.x += (targetX - prop.x) * clamp(motion.travel * 3);
+        prop.y += (targetY - prop.y) * clamp((motion.travel - 1 / 3) * 1.5) ** 2;
+        if (motion.travel >= 1) { prop.mode = 'ground'; prop.supportY = 175; prop.slot = [201, 222]; }
       } else if (!reduced) {
         // A short lift from the hand, then a drop onto the existing counter or ground.
-        prop.y -= 10 * Math.sin(p * Math.PI);
+        prop.y -= motion.lift;
       }
-      if (p < 1) actor.pose = 1;
+      if (motion.active) actor.pose = 1;
+    }
+    const propContact = ['pass', 'drop'].includes(action.action) && prop.type !== 'none';
+    if (propContact || action.action === 'recoil') {
+      const x = propContact ? prop.x + (prop.shape[0] + prop.shape[2]) * prop.scale / 2 : actor.x + 32;
+      const y = propContact ? prop.supportY ?? prop.y + prop.shape[3] * prop.scale : actor.y + 64;
+      effects.push(...sampleImpact({ x, y, age: motion.impactAge, reduced }));
+      impact = Math.max(impact, motion.impact);
+      // The other resident reacts after contact without walking out of their safe anchor.
+      const reaction = sampleAction('recoil', motion.impactAge - 100, { duration: 200, reduced });
+      if (!reduced && reaction.active) {
+        const observer = actors[1 - role];
+        observer.pose = 3;
+        observer.lean += reaction.lean * facing(observer);
+      }
     }
   }
+  for (const actor of actors) actor.lean = clamp(actor.lean, -3, 3);
   // The rooftop bench reaches x=140; mirrored atlas poses can begin six pixels
   // inside their cell, so even a recoil must keep the cell at or beyond x=134.
-  if (project.room === 'rooftop') actors[0].x = Math.max(134, actors[0].x);
+  if (project.room === 'rooftop') {
+    actors[0].x = Math.max(134, actors[0].x);
+    // Do not let a backward lean rotate the near resident into the bench.
+    const margin = actors[0].x + 6 - 140;
+    actors[0].lean = Math.max(actors[0].lean, -Math.asin(clamp(margin / 64)) * 180 / Math.PI);
+  }
   prop.bounds = prop.shape.map((point, index) => point * prop.scale + (index % 2 ? prop.y : prop.x));
+  const camera = sampleCamera({ time: t, speaker: beat.speaker, previousSpeaker: compiled.beats[Math.max(0, index - 1)].speaker, lineStart: beat.start, actors, impact, reduced });
   const visibleCount = clamp(Math.floor((t - beat.start) / TYPE_INTERVAL), 0, beat.characters.length);
-  return { time: t, duration: compiled.duration, beatIndex: index, beatId: beat.id, speaker: beat.speaker, speakerId: project.cast[beat.speaker], visibleText: beat.characters.slice(0, visibleCount).join(''), text: beat.text, english: beat.english, actors, prop, speaking: t < beat.speechEnd, captions: project.captions, direction: project.language.script.direction, progress: compiled.duration ? t / compiled.duration : 0 };
+  return { time: t, duration: compiled.duration, beatIndex: index, beatId: beat.id, speaker: beat.speaker, speakerId: project.cast[beat.speaker], visibleText: beat.characters.slice(0, visibleCount).join(''), text: beat.text, english: beat.english, actors, prop, camera, effects, speaking: t < beat.speechEnd, captions: project.captions, direction: project.language.script.direction, progress: compiled.duration ? t / compiled.duration : 0 };
 }
 
 export function loadSceneProjects(storage) {
