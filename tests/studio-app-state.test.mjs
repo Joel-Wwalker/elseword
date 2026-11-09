@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { createLanguage } from '../src/engine.js';
+import { createLanguage, composeSentence } from '../src/engine.js';
 import { validateRulesEdit } from '../src/studio-usability.js';
 
 const app = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
@@ -26,7 +26,7 @@ test('a correction after failed Apply survives another grammar change and tab re
   let current = createLanguage();
   const context = vm.createContext({
     $: get, language: () => current, rulesFormLanguageId: null, soundDraft: null, grammarDraft: {}, rulesErrors: { sounds: {}, grammar: {} },
-    PRESETS: [], generateWord: () => 'na', escapeHTML: String, composeSentence: () => ({ text: 'na' }), renderWriting: String,
+    PRESETS: [], generateWord: () => 'na', escapeHTML: String, composeSentence, renderWriting: String,
     byEnglish: () => ({ word: 'na' }), clone: structuredClone, playGenerated() {},
     validateRulesEdit: (source, patch) => validateRulesEdit(source, structuredClone(patch)),
     commit(next) { current = next; return true; },
@@ -36,7 +36,7 @@ test('a correction after failed Apply survives another grammar change and tab re
     },
   });
   vm.runInContext(section('function renderRules()', 'function renderSentenceSelectors()'), context);
-  vm.runInContext('displayRulesErrors = () => {}; renderRules();', context);
+  vm.runInContext("displayRulesErrors = () => {}; if (typeof renderGenerationStatus === 'function') renderGenerationStatus = () => {}; renderRules();", context);
   vm.runInContext(section("document.addEventListener('change',event=>{", "$('language-switch').onchange"), context);
   get('vowels').value = '';
   vm.runInContext('applySounds();', context);
