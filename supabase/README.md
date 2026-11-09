@@ -12,9 +12,11 @@ Create a Supabase project, then apply these files once, in filename order:
 | 2 | [`202611080001_language_tools.sql`](migrations/202611080001_language_tools.sql) | Language v2 validation for word families, sound rules, and phrasebooks; keeps v1 support without rewriting existing rows. |
 | 3 | [`202611080002_cloud_scenes.sql`](migrations/202611080002_cloud_scenes.sql) | Scene storage, validation, owner read policies, and versioned save/delete functions. |
 
-The SQL expects Supabase's `auth.users`, `auth.uid()`, `anon`, and `authenticated` roles. Use your migration runner, or apply the files manually in the SQL editor. For manual installation, wrap the first file in `BEGIN;` and `COMMIT;`; the two later files already contain transaction boundaries. Run and verify one file before continuing to the next.
+| 4 | [`202611090001_language_catalog.sql`](migrations/202611090001_language_catalog.sql) | Private catalog of 1,000 language blueprints and anonymous single-language selection. |
 
-Keep a record of which migrations were applied to each environment. Manual SQL execution does not register migration history with a CLI runner. Do not replay already-applied files. Treat all three migration files as immutable and add a new migration for future changes.
+The SQL expects Supabase's `auth.users`, `auth.uid()`, `anon`, and `authenticated` roles. Use your migration runner, or apply the files manually in the SQL editor. For manual installation, wrap the first file in `BEGIN;` and `COMMIT;`; the later files already contain transaction boundaries. Run and verify one file before continuing to the next.
+
+Keep a record of which migrations were applied to each environment. Manual SQL execution does not register migration history with a CLI runner. Do not replay already-applied files. Treat all applied migration files as immutable and add a new migration for future changes.
 
 ## Configure the app and authentication
 

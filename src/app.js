@@ -1,4 +1,5 @@
 import { CORE_VOCAB, PRESETS, createLanguage, generateWord, regenerateLanguage, translateText, composeSentence, validateLanguage, exportCSV, generateNames, applySoundChange, renderWriting } from './engine.js';
+import { createLanguageGenerator } from './language-generator.js';
 import { WRITING_PRESETS, applyWritingPreset, identifyWritingPreset } from './writing-presets.js';
 import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes } from './scenes.js';
 import { ensureSceneVocabulary } from './scene-language.js';
@@ -16,6 +17,7 @@ const escapeHTML = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&a
 const clone = value => structuredClone(value);
 const uid = () => `lang-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
 const WORDS_PER_PAGE = 15;
+const generateLanguage = createLanguageGenerator(CLOUD_CONFIG);
 const SCENE_HIDDEN_KEY = 'elseword-scene-hidden-v1';
 let storage;
 try { storage = localStorage; } catch { storage = {getItem:()=>null,setItem:()=>{throw new Error('Your browser has disabled local storage. Export a backup to keep your work.');}}; }
@@ -247,12 +249,27 @@ function sceneWordDialog(token) {
   };
   $('scene-word-value').onkeydown=event=>{if(event.key==='Enter'&&!event.isComposing){event.preventDefault();$('save-scene-word').click();}};
 }
+function addCreatedLanguage(fresh) {
+  if(project.languages.length>=50)throw new Error('You can keep 50 languages on this device. Export and remove one first.');
+  fresh.id=uid();checkpoint();project.languages.push(fresh);project.activeId=fresh.id;page=0;save();closeDialog();renderAll();showView('world');player.replay();if(!worldPreviewAvailable())player.pause();notify(`${fresh.name} created.`);
+}
 function newLanguageDialog() {
-  openDialog('Create a language',`<p class="dialog-intro">Choose a name and sound preset. You can change them later.</p><div class="form-grid"><label>Language name<input id="new-name" value="" placeholder="Language name" maxlength="40" autofocus></label><label>Starting sound<select id="new-preset">${PRESETS.map(p=>option(p.id,p.name)).join('')}</select></label></div><label>Seed <span class="footnote">Same seed, same starting words</span><input id="new-seed" value="${Date.now().toString(36)}" maxlength="80"></label>`,`<button class="secondary-button" data-close>Cancel</button><button class="primary-button" id="confirm-create">Create language</button>`);
-  $('confirm-create').onclick=()=>{
-    try{if(project.languages.length>=50)throw new Error('You can keep 50 languages on this device. Export and remove one first.');
-      const fresh=createLanguage({name:$('new-name').value.trim()||'Untitled language',preset:$('new-preset').value,seed:$('new-seed').value.trim()||Date.now().toString(36)});fresh.id=uid();checkpoint();project.languages.push(fresh);project.activeId=fresh.id;page=0;save();closeDialog();renderAll();showView('world');player.replay();if(!worldPreviewAvailable())player.pause();notify(`${fresh.name} created.`);
-    }catch(error){$('modal-error').textContent=error.message;}
+  openDialog('Create a language',`<p class="dialog-intro">Generate a language with its own sounds, words and grammar. Everything is yours to edit.</p><p class="small-note">Generation needs an internet connection. No account needed.</p><details class="advanced"><summary>Choose your own starting point</summary><div class="advanced-body"><div class="form-grid"><label>Language name<input id="new-name" value="" placeholder="Language name" maxlength="40"></label><label>Starting sound<select id="new-preset">${PRESETS.map(p=>option(p.id,p.name)).join('')}</select></label></div><label>Seed <span class="footnote">Same seed, same starting words</span><input id="new-seed" value="${Date.now().toString(36)}" maxlength="80"></label><button class="secondary-button" id="confirm-create">Create from these settings</button></div></details>`,`<button class="secondary-button" data-close>Cancel</button><button class="primary-button" id="generate-language">Generate language</button>`);
+  const generateButton=$('generate-language'), manualButton=$('confirm-create'), errorBox=$('modal-error');
+  generateButton.onclick=async()=>{
+    if(project.languages.length>=50){errorBox.textContent='You can keep 50 languages on this device. Export and remove one first.';return;}
+    generateButton.disabled=true;manualButton.disabled=true;generateButton.textContent='Generating…';errorBox.textContent='';
+    try {
+      const fresh=await generateLanguage(project.languages.map(item=>item.seed));
+      if(!$('studio-dialog').open||$('generate-language')!==generateButton)return;
+      addCreatedLanguage(fresh);
+    } catch(error) {
+      if($('studio-dialog').open&&$('generate-language')===generateButton)errorBox.textContent=error.message;
+    } finally {generateButton.disabled=false;manualButton.disabled=false;generateButton.textContent='Generate language';}
+  };
+  manualButton.onclick=()=>{
+    try{addCreatedLanguage(createLanguage({name:$('new-name').value.trim()||'Untitled language',preset:$('new-preset').value,seed:$('new-seed').value.trim()||Date.now().toString(36)}));}
+    catch(error){errorBox.textContent=error.message;}
   };
 }
 function editWordDialog(id,meaning='') {

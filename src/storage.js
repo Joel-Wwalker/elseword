@@ -1,4 +1,5 @@
 import { createLanguage, validateLanguage } from './engine.js';
+import { createStarterLanguages, addNewStarters, STARTER_SET_VERSION } from './starter-languages.js';
 
 export const STORAGE_KEY = 'little-languages-studio-v1';
 export const RECOVERY_STORAGE_KEY = `${STORAGE_KEY}-recovery`;
@@ -6,8 +7,8 @@ const MAX_LANGUAGES = 50;
 const MAX_PROJECT_SIZE = 10_000_000;
 
 function fallback(warning = null, recoveryRaw) {
-  const language = createLanguage();
-  return { languages: [language], activeId: language.id, warning, ...(typeof recoveryRaw === 'string' ? { recoveryRaw } : {}) };
+  const languages = warning ? [createLanguage()] : createStarterLanguages();
+  return { languages, activeId: languages[0].id, starterSetVersion: STARTER_SET_VERSION, warning, ...(typeof recoveryRaw === 'string' ? { recoveryRaw } : {}) };
 }
 
 function projectShape(value) {
@@ -49,7 +50,8 @@ export function loadProject(storage) {
     const warnings = [];
     if (skipped) warnings.push(`Recovered ${languages.length} saved language${languages.length === 1 ? '' : 's'}; skipped ${skipped} damaged or duplicate entr${skipped === 1 ? 'y' : 'ies'}. The original save has not been changed.`);
     if (activeId !== project.activeId) warnings.push('The saved selection was unavailable, so the first valid language is open.');
-    return { languages, activeId, warning: warnings.length ? warnings.join(' ') : null, ...(skipped ? { recoveryRaw: raw } : {}) };
+    const needsStarters = project.starterSetVersion !== STARTER_SET_VERSION && !skipped;
+    return { languages: needsStarters ? addNewStarters(languages, MAX_LANGUAGES) : languages, activeId, starterSetVersion: STARTER_SET_VERSION, warning: warnings.length ? warnings.join(' ') : null, ...(skipped ? { recoveryRaw: raw } : {}) };
   } catch (error) {
     return fallback(`The saved project could not be recovered: ${error.message} A fresh Luma is open; the original save has not been changed. A recovery copy will be preserved before your next save.`, raw);
   }
@@ -63,7 +65,7 @@ export function saveProject(storage, project) {
   const ids = new Set(languages.map((language) => language.id));
   if (ids.size !== languages.length) throw new Error('Language IDs must be unique; this project contains a duplicate.');
   const activeId = ids.has(project.activeId) ? project.activeId : languages[0].id;
-  const normalized = { version: 1, languages, activeId };
+  const normalized = { version: 1, languages, activeId, starterSetVersion: STARTER_SET_VERSION };
   const serialized = JSON.stringify(normalized);
   if (serialized.length > MAX_PROJECT_SIZE) throw new Error('This project is too large for a browser save. Export a backup and keep fewer languages in this project.');
   if (project.recoveryRaw !== undefined && typeof project.recoveryRaw !== 'string') throw new Error('The recovery backup must be text. The original save has not been changed.');
