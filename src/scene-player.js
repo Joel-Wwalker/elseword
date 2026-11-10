@@ -3,7 +3,7 @@ import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes, resolveSceneChoi
 import { renderWrittenSceneLine } from './scene-language.js';
 import { getSceneLayout, getEpisodeTiming, sampleSceneLayout, shouldFlipCharacter } from './scene-layout.js';
 import { TextAudio, isAudibleCharacter } from './text-audio.js';
-import { sampleCamera, sampleAtmosphere } from './scene-direction.js';
+import { sampleCamera, sampleAtmosphere, sampleRain } from './scene-direction.js';
 import { sampleExpressions } from './scene-expressions.js';
 import { resolveCharacterFace } from './character-faces.js';
 import { faceMarkup } from './character-face-renderer.js';
@@ -11,7 +11,9 @@ import { episodeSoundEvents, crossedSoundEvents } from './scene-sound-events.js'
 
 let facePlayerId = 0;
 
-export const RAIN_CLIP_RECTS = [[27, 23, 330, 47], [27, 70, 58, 114], [296, 70, 61, 114], [27, 169, 330, 15]];
+export const RAIN_CLIP_RECTS = [[27, 23, 330, 47], [27, 70, 54, 114], [305, 70, 52, 114], [27, 169, 330, 15]];
+export const RAIN_COLOR = '#a5b7c2';
+const rainPath = (time, options) => sampleRain(time, options).map(({ x, y, width, height }) => `M${x} ${y}h${width}v${height}h-${width}Z`).join('');
 
 /** Authored grammar changes the speech; the exact original English remains its gloss. */
 export function buildDialogue(scene, language) {
@@ -119,7 +121,7 @@ const bakeryForeground = `<svg class="scene-front" viewBox="0 0 384 216" aria-hi
 
 /** Room markup contains only local, hand-authored geometry, never user-supplied strings. */
 export function renderRoom(id) {
-  let background = '', foreground = '', ambient = '', rainLayer = '';
+  let background = '', foreground = '', ambient = '';
   const layout = getSceneLayout(id);
   if (id === 'bakery') return { background: bakeryBackground, foreground: bakeryForeground, ambient,
     positions: layout.positions };
@@ -143,10 +145,8 @@ export function renderRoom(id) {
     background += rect(48, 72, 4, 94, '#93928c') + rect(38, 58, 25, 28, '#acb9a3') + rect(43, 65, 15, 11, '#546778') + rect(44, 77, 4, 3, '#546778') + rect(54, 77, 4, 3, '#546778');
     background += rect(255, 91, 22, 31, '#bbb6a3') + rect(258, 96, 15, 2, '#777480') + rect(258, 103, 15, 2, '#777480') + rect(258, 110, 10, 2, '#777480');
     background += rect(53, 175, 31, 2, '#7b8190') + rect(277, 170, 36, 2, '#7b8190');
-    // The shelter blocks rain. Animate drops inside a fixed mask, not the mask itself.
-    const rain = Array.from({ length: 34 }, (_, i) => rect(30 + (i * 73) % 320, 21 + (i * 37) % 160, 1, 7, '#a5b7c2')).join('');
-    ambient = `<defs><clipPath id="rain-outside-shelter">${RAIN_CLIP_RECTS.map(bounds => rect(...bounds, '#fff')).join('')}</clipPath></defs><g clip-path="url(#rain-outside-shelter)"><g class="scene-rain-drops">${rain}</g></g>`;
-    rainLayer = svg(rain, 'scene-ambient');
+    // The shelter mask stays fixed while individual drops fall past it.
+    ambient = `<defs><clipPath id="rain-outside-shelter">${RAIN_CLIP_RECTS.map(bounds => rect(...bounds, '#fff')).join('')}</clipPath></defs><g clip-path="url(#rain-outside-shelter)"><path class="scene-rain-drops" d="${rainPath(0)}" fill="${RAIN_COLOR}"/></g>`;
   } else if (id === 'library') {
     background = indoor('#655861', '#44424f', '#998583');
     for (const x of [51, 130, 209]) for (const y of [51, 72]) background += shelf(x, y, 70, books(x + 5, y, 9));
@@ -189,7 +189,7 @@ export function renderRoom(id) {
     background += rect(103, 109, 10, 20, '#b9b192') + rect(106, 103, 4, 6, '#c2a679') + rect(107, 99, 2, 4, '#e0bd78');
     foreground = counter(207, 112, 127, '#7f675e') + rect(296, 99, 17, 8, '#8e9991') + rect(291, 96, 27, 4, '#b2b79d') + rect(301, 87, 5, 12, '#a5ab91');
   }
-  return { background: svg(background), foreground: svg(foreground, 'scene-front'), ambient: svg(ambient, 'scene-ambient'), rainLayer, positions: layout.positions };
+  return { background: svg(background), foreground: svg(foreground, 'scene-front'), ambient: svg(ambient, 'scene-ambient'), positions: layout.positions };
 }
 
 /** A background-only thumbnail without the player's positioning classes. */
@@ -679,7 +679,7 @@ export class ScenePlayer {
     if (this.ambient) {
       const atmosphere = sampleAtmosphere(this.scene.id, t, { reduced });
       this.ambient.style.opacity = String(atmosphere.opacity);
-      if (this.rainDrops) this.rainDrops.setAttribute('transform', `translate(${atmosphere.x} ${atmosphere.y})`);
+      if (this.rainDrops) this.rainDrops.setAttribute('d', rainPath(t, { reduced }));
     }
     this.el.progress.style.transform = `scaleX(${t / this.duration})`;
   }

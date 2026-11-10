@@ -1,9 +1,9 @@
 import { CHARACTERS, SCENES } from './scenes.js';
-import { renderRoom, propSVG, RAIN_CLIP_RECTS } from './scene-player.js';
+import { renderRoom, propSVG, RAIN_CLIP_RECTS, RAIN_COLOR } from './scene-player.js';
 import { SCENE_PROPS, sampleSceneProject } from './scene-project.js';
 import { CHARACTER_FACE_ATLASES, resolveCharacterFace } from './character-faces.js';
 import { paintFace } from './character-face-renderer.js';
-import { sampleAtmosphere } from './scene-direction.js';
+import { sampleAtmosphere, sampleRain } from './scene-direction.js';
 
 export const SCENE_CANVAS_WIDTH = 768;
 export const SCENE_CANVAS_HEIGHT = 720;
@@ -48,7 +48,7 @@ function preloadAssets() {
     const [roomEntries, atlasEntries, propEntries] = await Promise.all([
       Promise.all(SCENES.map(async scene => {
         const room = renderRoom(scene.id);
-        const [background, foreground, ambient] = await Promise.all([svgImage(room.background), svgImage(room.foreground), svgImage(room.rainLayer || room.ambient)]);
+        const [background, foreground, ambient] = await Promise.all([svgImage(room.background), svgImage(room.foreground), scene.id === 'busstop' ? null : svgImage(room.ambient)]);
         return [scene.id, { background, foreground, ambient }];
       })),
       Promise.all([...new Set([...CHARACTERS.map(character => character.atlas), ...CHARACTER_FACE_ATLASES])].map(async atlas => [atlas, await loadImage(new URL(atlas, document.baseURI).href)])),
@@ -132,15 +132,16 @@ export async function createSceneRenderer(canvas) {
     if (room.foreground) context.drawImage(room.foreground, 0, 0, 384, 216);
     if (frame.prop.mode === 'counter') paintProp(frame.prop);
     paintActor(frame.actors[0]);
-    if (room.ambient) {
+    if (room.ambient || compiled.project.room === 'busstop') {
       const atmosphere = sampleAtmosphere(compiled.project.room, frame.time, options);
       context.save(); context.globalAlpha = atmosphere.opacity;
       if (compiled.project.room === 'busstop') {
         context.beginPath();
         for (const bounds of RAIN_CLIP_RECTS) context.rect(...bounds);
         context.clip();
-      }
-      context.drawImage(room.ambient, atmosphere.x, atmosphere.y, 384, 216);
+        context.fillStyle = RAIN_COLOR;
+        for (const drop of sampleRain(frame.time, options)) context.fillRect(drop.x, drop.y, drop.width, drop.height);
+      } else context.drawImage(room.ambient, 0, 0, 384, 216);
       context.restore();
     }
     for (const effect of frame.effects) {

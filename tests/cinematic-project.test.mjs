@@ -6,6 +6,7 @@ import { createSceneProject, compileSceneProject, sampleSceneProject } from '../
 import { createSceneRenderer } from '../src/scene-renderer.js';
 import { SCENES } from '../src/scenes.js';
 import { getSceneLayout } from '../src/scene-layout.js';
+import { sampleRain } from '../src/scene-direction.js';
 
 const line = (id, action, speaker = 0) => ({ id, speaker, mode: 'literal', text: 'Hello.', english: 'Hello.', action, cue: 'start', wordIndex: 0, pauseMs: 1200 });
 function scene(room = 'bakery', actions = ['drop']) {
@@ -184,7 +185,7 @@ test('video renderer clips and moves every room layer together while restoring c
   renderer.destroy();
 });
 
-test('canvas rain moves beneath a fixed shelter mask and matches World atmosphere opacity', async t => {
+test('canvas rain uses the shared falling drops under a fixed shelter mask', async t => {
   const previousImage = globalThis.Image, previousDocument = globalThis.document;
   t.after(() => { globalThis.Image = previousImage; globalThis.document = previousDocument; });
   globalThis.Image = SceneImage;
@@ -193,15 +194,16 @@ test('canvas rain moves beneath a fixed shelter mask and matches World atmospher
   const renderer = await createSceneRenderer({ getContext: () => context });
   t.after(() => renderer.destroy());
   const rainy = scene('busstop', ['none']), rooftop = scene('rooftop', ['none']);
-  for (const [time, reduced, position, opacity] of [[1000, false, [-2, 12], 0.5], [1080, false, [-3, 1], 0.5], [1080, true, [0, 0], 0.35]]) {
+  for (const [time, reduced, opacity] of [[400, false, 0.5], [520, false, 0.5], [1080, false, 0.5], [1080, true, 0.35]]) {
     calls.length = 0;
     renderer.draw(rainy, time, { reduced });
-    const rain = calls.filter(call => call.type === 'image').at(-1);
-    assert.doesNotMatch(rain.args[0].markup, /clipPath|clip-path/u, 'The moving rain image must not carry the stationary shelter mask');
-    assert.deepEqual(rain.args.slice(1), [...position, 384, 216], 'Rain translates independently of the room');
-    assert.equal(rain.alpha, opacity);
+    const rain = calls.filter(call => call.type === 'fillRect' && call.alpha === opacity);
+    assert.deepEqual(rain.map(call => call.args), sampleRain(time, { reduced }).map(({ x, y, width, height }) => [x, y, width, height]));
+    assert.ok(rain.every(call => call.clipped));
+    const lastActor = calls.findLastIndex(call => call.type === 'image' && call.args.length === 9);
+    assert.ok(rain.every(call => calls.indexOf(call) > lastActor), 'Exposed rain stays in front of the actors');
     assert.deepEqual(calls.filter(call => call.type === 'clipRect').slice(-4).map(call => call.args),
-      [[27, 23, 330, 47], [27, 70, 58, 114], [296, 70, 61, 114], [27, 169, 330, 15]], 'The shelter mask stays fixed as rain moves');
+      [[27, 23, 330, 47], [27, 70, 54, 114], [305, 70, 52, 114], [27, 169, 330, 15]], 'The shelter mask stays fixed as rain moves');
     assert.ok(calls.filter(call => call.type === 'text').every(call => call.alpha === 1), 'Atmosphere opacity must not dim captions');
   }
   for (const [time, reduced, opacity] of [[1000, false, 0.8], [1200, false, 0.4], [1200, true, 0.35]]) {
