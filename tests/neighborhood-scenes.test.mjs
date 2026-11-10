@@ -31,9 +31,9 @@ test('each neighborhood compiles six authored lines using present residents and 
   const language = literalLanguage(), before = structuredClone(language);
   assert.deepEqual(NEIGHBORHOOD_SCENES.map(scene => scene.id), ['apartments', 'nightmarket', 'train']);
   const expected = [
-    ['the soup be ready.', 'what PAST be that Q?', 'i PAST drop the pan.', 'the water be cold.', 'the pipe be broken.', 'i FUT fix it.'],
-    ['i want the soup.', 'the bowl be hot.', 'i FUT wait.', 'that PAST be my food.', 'the cat PAST eat it.', 'damn.'],
-    ['this be my stop!', 'the train PAST pass the station.', 'shit.', 'my bag move.', 'i FUT catch it.', 'you PAST miss the bag.'],
+    ['the soup be ready. i can eat now.', 'what PAST be that Q? you be alive Q?', 'yes. i PAST drop the pan. go back to sleep.', 'the water be cold!', 'the pipe be broken. again.', 'again Q? i PAST fix it yesterday.'],
+    ['i need the soup. i be hungry.', 'wait. the bowl be hot.', 'damn. i FUT wait.', 'no! that PAST be my food!', 'the cat PAST eat it.', 'i hope the cat can pay.'],
+    ['wait! this be my stop!', 'that PAST be your stop.', 'shit. i PAST wave at it.', 'my bag move. my wallet be inside!', 'i FUT catch it. NEG panic.', 'you PAST miss the bag. i can panic now Q?'],
   ];
   for (const [index, scene] of NEIGHBORHOOD_SCENES.entries()) {
     const lines = compilePresetDialogue(scene, language);
@@ -61,12 +61,12 @@ test('all six word orders preserve tense, noun phrases, and the apartment questi
   const { APARTMENTS, NIGHT_MARKET, TRAIN_CARRIAGE, compilePresetDialogue } = api();
   const language = literalLanguage();
   const expected = [
-    ['SVO', 'i PAST drop the pan.', 'what PAST be that Q?', 'the cat PAST eat it.', 'you PAST miss the bag.'],
-    ['SOV', 'i the pan PAST drop.', 'what that PAST be Q?', 'the cat it PAST eat.', 'you the bag PAST miss.'],
-    ['VSO', 'PAST drop i the pan.', 'PAST be what that Q?', 'PAST eat the cat it.', 'PAST miss you the bag.'],
-    ['VOS', 'PAST drop the pan i.', 'PAST be that what Q?', 'PAST eat it the cat.', 'PAST miss the bag you.'],
-    ['OSV', 'the pan i PAST drop.', 'that what PAST be Q?', 'it the cat PAST eat.', 'the bag you PAST miss.'],
-    ['OVS', 'the pan PAST drop i.', 'that PAST be what Q?', 'it PAST eat the cat.', 'the bag PAST miss you.'],
+    ['SVO', 'yes. i PAST drop the pan. go back to sleep.', 'what PAST be that Q? you be alive Q?', 'the cat PAST eat it.', 'you PAST miss the bag. i can panic now Q?'],
+    ['SOV', 'yes. i the pan PAST drop. go back to sleep.', 'what that PAST be Q? you alive be Q?', 'the cat it PAST eat.', 'you the bag PAST miss. i can panic now Q?'],
+    ['VSO', 'yes. PAST drop i the pan. go back to sleep.', 'PAST be what that Q? be you alive Q?', 'PAST eat the cat it.', 'PAST miss you the bag. can panic i now Q?'],
+    ['VOS', 'yes. PAST drop the pan i. go back to sleep.', 'PAST be that what Q? be alive you Q?', 'PAST eat it the cat.', 'PAST miss the bag you. can panic i now Q?'],
+    ['OSV', 'yes. the pan i PAST drop. go back to sleep.', 'that what PAST be Q? alive you be Q?', 'it the cat PAST eat.', 'the bag you PAST miss. i can panic now Q?'],
+    ['OVS', 'yes. the pan PAST drop i. go back to sleep.', 'that PAST be what Q? alive be you Q?', 'it PAST eat the cat.', 'the bag PAST miss you. can panic i now Q?'],
   ];
   for (const [order, pan, question, cat, bag] of expected) {
     language.grammar.order = order;
@@ -77,33 +77,37 @@ test('all six word orders preserve tense, noun phrases, and the apartment questi
     assert.equal(compilePresetDialogue(TRAIN_CARRIAGE, language)[5].text, bag);
   }
   language.grammar = { ...language.grammar, order: 'SVO', past: '', future: '', question: '' };
-  assert.equal(compilePresetDialogue(APARTMENTS, language)[1].text, 'what be that?');
-  assert.equal(compilePresetDialogue(TRAIN_CARRIAGE, language)[4].text, 'i catch it.');
+  assert.equal(compilePresetDialogue(APARTMENTS, language)[1].text, 'what be that? you be alive?');
+  assert.equal(compilePresetDialogue(TRAIN_CARRIAGE, language)[4].text, 'i catch it. NEG panic.');
 });
 
 test('custom RTL glyphs retain root ownership, punctuation, long words, and visible unknowns', () => {
   const { APARTMENTS, compilePresetDialogue } = api();
   const language = literalLanguage();
+  // Isolate the dropped-pan clause so this glyph fixture keeps its boundary cases
+  // even when the surrounding dialogue includes more sentences.
+  const panLine = APARTMENTS.lines.find(line => line.id === 'pan-3');
+  const fixture = { lines: [{ ...panLine, syntax: panLine.syntax.filter(node => node.verb === 'drop') }] };
   const replacements = { i: 'e\u0301', drop: 'sh', the: '🙂', pan: 'a' };
   for (const word of language.words) if (Object.hasOwn(replacements, word.english)) word.word = replacements[word.english];
   language.script = { style: 'custom', direction: 'rtl', glyphs: { é: 'אב', sh: '𐀀', '🙂': '☽△', 'a.': 'Z' } };
-  const line = compilePresetDialogue(APARTMENTS, language)[2];
+  const line = compilePresetDialogue(fixture, language)[0];
   assert.equal(line.text, 'אב PAST 𐀀 ☽△ Z');
   assert.deepEqual(line.tokens.map(({ key, marker, start, end, text }) => [key ?? marker, start, end, text]), [
     ['i', 0, 2, 'אב'], ['past', 3, 7, 'PAST'], ['drop', 8, 9, '𐀀'], ['the', 10, 12, '☽△'], ['pan', 13, 14, 'Z'],
   ]);
   language.script.glyphs['🙂 a'] = 'XX';
-  const shared = compilePresetDialogue(APARTMENTS, language)[2];
+  const shared = compilePresetDialogue(fixture, language)[0];
   assert.equal(shared.text, 'אב PAST 𐀀 XX.');
   assert.deepEqual(shared.tokens.filter(token => token.kind === 'word').map(token => token.key), ['i', 'drop']);
   language.words.find(word => word.english === 'pan').word = '𐀀'.repeat(80);
   language.script.glyphs['𐀀'] = 'abcdefgh';
-  const long = compilePresetDialogue(APARTMENTS, language)[2];
+  const long = compilePresetDialogue(fixture, language)[0];
   const pan = long.tokens.find(token => token.key === 'pan');
   assert.equal(pan.text, 'abcdefgh'.repeat(80));
   assert.equal([...long.text].slice(pan.start, pan.end).join(''), pan.text);
   language.words = language.words.filter(word => word.english !== 'pan');
-  const missing = compilePresetDialogue(APARTMENTS, language)[2];
+  const missing = compilePresetDialogue(fixture, language)[0];
   assert.deepEqual(missing.unknown, ['pan']);
   assert.equal(missing.tokens.find(token => token.key === 'pan').wordId, undefined);
   assert.match(missing.text, /⟦pan⟧/u);
@@ -127,6 +131,60 @@ test('neighborhood additions preserve the pre-release dictionary and all saved u
   assert.equal(upgraded.words.filter(word => word.english.trim().toLowerCase() === 'drop').length, 1);
   assert.ok(additions.every(key => upgraded.words.some(word => word.english.trim().toLowerCase() === key)));
   assert.equal(new Set(upgraded.words.map(word => word.id)).size, upgraded.words.length);
+  assert.equal(ensureSceneVocabulary(upgraded), upgraded);
+  assert.doesNotThrow(() => validateLanguage(upgraded));
+});
+
+test('nested hope clauses and negative imperatives retain meaning in every word order', () => {
+  const { NIGHT_MARKET, TRAIN_CARRIAGE, compilePresetDialogue } = api();
+  const language = literalLanguage();
+  const expected = [
+    ['SVO', 'i hope the cat can pay.'],
+    ['SOV', 'i the cat can pay hope.'],
+    ['VSO', 'hope i can pay the cat.'],
+    ['VOS', 'hope can pay the cat i.'],
+    ['OSV', 'the cat can pay i hope.'],
+    ['OVS', 'can pay the cat hope i.'],
+  ];
+  for (const [order, hope] of expected) {
+    language.grammar.order = order;
+    const market = compilePresetDialogue(NIGHT_MARKET, language).find(line => line.id === 'theft-3');
+    assert.equal(market.text, hope);
+    assert.deepEqual(market.unknown, []);
+    const reassurance = compilePresetDialogue(TRAIN_CARRIAGE, language).find(line => line.id === 'luggage-2');
+    assert.ok(reassurance.text.endsWith(' NEG panic.'));
+    assert.equal(reassurance.tokens.filter(token => token.marker === 'negative').length, 1);
+    assert.equal(reassurance.tokens.filter(token => token.key === 'panic').length, 1);
+  }
+});
+
+test('separate alarm questions and a repeated fragment receive their own question markers', () => {
+  const { APARTMENTS, compilePresetDialogue } = api();
+  const language = literalLanguage();
+  const lines = compilePresetDialogue(APARTMENTS, language);
+  assert.equal(lines[1].text, 'what PAST be that Q? you be alive Q?');
+  assert.equal(lines[1].tokens.filter(token => token.marker === 'question').length, 2);
+  assert.equal(lines[5].text, 'again Q? i PAST fix it yesterday.');
+  assert.equal(lines[5].tokens.filter(token => token.marker === 'question').length, 1);
+  language.grammar.question = '';
+  assert.equal(compilePresetDialogue(APARTMENTS, language)[1].text, 'what PAST be that? you be alive?');
+  assert.equal(compilePresetDialogue(APARTMENTS, language)[5].text, 'again? i PAST fix it yesterday.');
+});
+
+test('expressive dialogue appends roots without changing the previous 250 words or saved edits', () => {
+  const language = createLanguage({ seed: 'emotive-compat' });
+  assert.equal(createHash('sha256').update(JSON.stringify(language.words.slice(0, 250))).digest('hex'), '4fa0ebc74edf12a999c1b3318c1057da2cf57436967dd6235596261bc0ef1512');
+  const additions = ['face', 'alive', 'hungry', 'wave', 'panic', 'at'];
+  assert.deepEqual(new Set(language.words.slice(250).map(word => word.english)), new Set(additions));
+  language.words = language.words.slice(0, 250);
+  language.words.push({ id: 'face', english: 'custom mask', word: 'mymask', locked: true, notes: 'Keep ID.', pos: 'noun', category: 'Custom' });
+  language.words.push({ id: 'personal-wave', english: ' WAVE ', word: 'mywave', locked: true, notes: 'Keep spelling.', pos: 'verb', category: 'Custom', extra: { mine: true } });
+  const before = structuredClone(language), upgraded = ensureSceneVocabulary(language);
+  assert.deepEqual(language, before);
+  assert.deepEqual(upgraded.words.slice(0, before.words.length), before.words);
+  assert.notEqual(upgraded.words.find(word => word.english === 'face').id, 'face');
+  assert.equal(upgraded.words.filter(word => word.english.trim().toLowerCase() === 'wave').length, 1);
+  assert.ok(additions.every(key => upgraded.words.some(word => word.english.trim().toLowerCase() === key)));
   assert.equal(ensureSceneVocabulary(upgraded), upgraded);
   assert.doesNotThrow(() => validateLanguage(upgraded));
 });

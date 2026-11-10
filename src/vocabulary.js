@@ -38,6 +38,10 @@ export const SCENE_VOCAB_ADDITIONS = Object.freeze(entries([
   ['Everyday things', 'noun', 'pan|pipe'],
   ['Food', 'noun', 'food'],
   ['Descriptions', 'adjective', 'broken'],
+  ['Everyday things', 'noun', 'face'],
+  ['Descriptions', 'adjective', 'alive|hungry'],
+  ['Actions', 'verb', 'wave|panic'],
+  ['Directions', 'particle', 'at'],
 ]));
 
 export const CORE_VOCAB = Object.freeze([...entries(groups), ...SCENE_VOCAB_ADDITIONS]);

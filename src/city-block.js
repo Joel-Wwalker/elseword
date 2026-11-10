@@ -3,34 +3,45 @@ import { compilePresetDialogue } from './world-dialogue.js';
 
 const noun = (head, determiner) => ({ type: 'noun', head, determiner });
 const clause = (subject, verb, object, options = {}) => ({ type: 'clause', subject, verb, object, ...options });
+const sequence = (...items) => ({ type: 'sequence', items });
 const fragment = (word, punctuation = '.') => ({ type: 'fragment', items: [word], punctuation });
 
 const lines = [
   { id: 'wallet-1', speaker: 'moss', incident: 'wallet', english: 'Damn, I forgot my wallet!', syntax: [
     fragment('damn', ','), clause('i', 'forget', noun('wallet', 'my'), { tense: 'past', punctuation: '!' }),
   ] },
-  { id: 'wallet-2', speaker: 'kiln', incident: 'wallet', english: 'You ate the bread.', syntax: [
+  { id: 'wallet-2', speaker: 'kiln', incident: 'wallet', english: 'You ate the bread. That bread wasn\'t free.', syntax: [
     clause('you', 'eat', noun('bread', 'the'), { tense: 'past' }),
+    clause(noun('bread', 'that'), 'be', 'free', { tense: 'past', negative: true }),
   ] },
-  { id: 'wallet-3', speaker: 'moss', incident: 'wallet', english: 'I will come back.', syntax: [
+  { id: 'wallet-3', speaker: 'moss', incident: 'wallet', english: 'Sorry. I\'ll come back. Please forget my face.', syntax: [
+    fragment('sorry'),
     clause('i', 'come', undefined, { tense: 'future', tail: 'back' }),
+    clause(undefined, 'forget', noun('face', 'my'), { front: 'please' }),
   ] },
-  { id: 'delivery-1', speaker: 'vesper', incident: 'delivery', english: 'Is this your package?', syntax: [
+  { id: 'delivery-1', speaker: 'vesper', incident: 'delivery', english: 'Is this your package? Please say yes.', syntax: [
     clause('this', 'be', noun('package', 'your'), { question: true }),
+    clause(undefined, 'say', 'yes', { front: 'please' }),
   ] },
-  { id: 'delivery-2', speaker: 'hush', incident: 'delivery', english: 'I ordered one book.', syntax: [
+  { id: 'delivery-2', speaker: 'hush', incident: 'delivery', english: 'I ordered one book. One.', syntax: [
     clause('i', 'order', noun('book', 'one'), { tense: 'past' }),
+    fragment('one'),
   ] },
-  { id: 'delivery-3', speaker: 'vesper', incident: 'delivery', english: 'This is a chair.', syntax: [
+  { id: 'delivery-3', speaker: 'vesper', incident: 'delivery', english: 'This is a chair. You can read on it.', syntax: [
     clause('this', 'be', noun('chair', 'a')),
+    clause('you', 'read', undefined, { modal: 'can', tail: sequence('on', 'it') }),
   ] },
-  { id: 'building-1', speaker: 'rook', incident: 'building', english: 'The wall is ready.', syntax: [
+  { id: 'building-1', speaker: 'rook', incident: 'building', english: 'The wall is ready. I can sleep now.', syntax: [
     clause(noun('wall', 'the'), 'be', 'ready'),
+    clause('i', 'sleep', undefined, { modal: 'can', tail: 'now' }),
   ] },
-  { id: 'building-2', speaker: 'brine', incident: 'building', english: 'Where is the door?', syntax: [
+  { id: 'building-2', speaker: 'brine', incident: 'building', english: 'Good. Where is the door?', syntax: [
+    fragment('good'),
     clause(noun('door', 'the'), 'be', undefined, { front: 'where', question: true }),
   ] },
-  { id: 'building-3', speaker: 'rook', incident: 'building', english: 'Shit.', syntax: [fragment('shit')] },
+  { id: 'building-3', speaker: 'rook', incident: 'building', english: 'Shit. I forgot the door.', syntax: [
+    fragment('shit'), clause('i', 'forget', noun('door', 'the'), { tense: 'past' }),
+  ] },
 ];
 
 export const CITY_BLOCK = {
