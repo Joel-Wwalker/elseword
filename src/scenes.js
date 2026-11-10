@@ -53,31 +53,36 @@ const polite = phrase => ({ type: 'fragment', items: [phrase, 'please'], separat
 
 const EXPRESSIONS = new Set(['neutral', 'curious', 'annoyed', 'pleased', 'worried', 'startled']);
 
-function authoredLines(lines, expressions) {
+function authoredLines(lines, expressions, reactionPauses) {
   if (expressions && expressions.length !== lines.length) throw new Error('Each authored line needs its own expression pair.');
+  if (Object.entries(reactionPauses ?? {}).some(([index, pause]) => !/^(0|[1-9]\d*)$/.test(index)
+    || Number(index) >= lines.length || !Number.isInteger(pause) || pause < 250 || pause > 650)) {
+    throw new Error('Authored reaction pauses must name a line and last between 250 and 650 milliseconds.');
+  }
   return lines.map(([speaker, english, ...syntax], index) => {
     const pair = expressions?.[index] ?? ['neutral', 'neutral'];
     if (!Array.isArray(pair) || pair.length !== 2 || pair.some(value => !EXPRESSIONS.has(value))) {
       throw new Error(`Line ${index + 1} needs two supported resident expressions.`);
     }
-    return { speaker, english, keys: english.toLowerCase().match(/[a-z]+/g) || [], syntax, expressions: [...pair] };
+    return { speaker, english, keys: english.toLowerCase().match(/[a-z]+/g) || [], syntax, expressions: [...pair],
+      ...(reactionPauses?.[index] === undefined ? {} : { reactionPauseMs: reactionPauses[index] }) };
   });
 }
 
 function episode(definition) {
-  const { expressions, ...properties } = definition;
-  const lines = authoredLines(properties.lines, expressions);
+  const { expressions, reactionPauses, ...properties } = definition;
+  const lines = authoredLines(properties.lines, expressions, reactionPauses);
   const choice = properties.choice ? {
     ...properties.choice,
-    options: properties.choice.options.map(({ expressions, ...option }) => ({ ...option, lines: authoredLines(option.lines, expressions) })),
+    options: properties.choice.options.map(({ expressions, reactionPauses, ...option }) => ({ ...option, lines: authoredLines(option.lines, expressions, reactionPauses) })),
   } : undefined;
   const allLines = [...lines, ...(choice?.options.flatMap(option => option.lines) ?? [])];
   return { animation: { type: 'original' }, ...properties, lines, choice, words: [...new Set(allLines.flatMap(getSceneLineWords))] };
 }
 
 function scene(definition) {
-  const { expressions, ...properties } = definition;
-  const original = episode({ id: 'original', title: properties.tag, tag: properties.tag, description: properties.description, lines: properties.lines, expressions, makerActions: properties.makerActions });
+  const { expressions, reactionPauses, ...properties } = definition;
+  const original = episode({ id: 'original', title: properties.tag, tag: properties.tag, description: properties.description, lines: properties.lines, expressions, reactionPauses, makerActions: properties.makerActions });
   const episodes = [original, ...(properties.episodes ?? []).map(episode)];
   // Original aliases keep the room grid and older scene consumers compatible.
   return { ...properties, lines: original.lines, words: original.words, animation: original.animation, title: original.title, episodes };
@@ -89,6 +94,7 @@ export const SCENES = [
     description: 'Warm window light, a wooden counter, and a loaf with little regard for the size of its bag.',
     tag: 'A little misunderstanding', characters: ['moss', 'kiln'], prop: 'bread',
     makerActions: { 1: { action: 'drop', cue: 'end' } },
+    reactionPauses: { 1: 400, 3: 450 },
     expressions: [['curious', 'neutral'], ['startled', 'neutral'], ['worried', 'neutral'], ['annoyed', 'neutral'], ['worried', 'neutral']],
     lines: [
       [0, 'One bread, please.', polite(noun('bread', { determiner: 'one' }))],
@@ -111,7 +117,7 @@ export const SCENES = [
               [0, 'I will take the bread.', clause('i', 'take', noun('bread', { determiner: 'the' }), { tense: 'future' })],
               [1, 'Good. It is fresh.', fragment('good'), clause('it', 'be', 'fresh')],
             ] },
-            { id: 'wait-for-cake', expressions: [['neutral', 'curious'], ['annoyed', 'pleased']], lines: [
+            { id: 'wait-for-cake', reactionPauses: { 1: 500 }, expressions: [['neutral', 'curious'], ['annoyed', 'pleased']], lines: [
               [0, 'I can wait for cake.', clause('i', 'wait', sequence('for', 'cake'), { modal: 'can' })],
               [1, 'Then I can eat the bread.', clause('i', 'eat', noun('bread', { determiner: 'the' }), { front: 'then', modal: 'can' })],
             ] },
@@ -130,6 +136,7 @@ export const SCENES = [
     id: 'market', name: 'The market', location: 'The last stall on the square',
     description: 'Striped awnings, crates of apples, and one unusually appealing free extra.',
     tag: 'A very small purchase', characters: ['vesper', 'slate'], prop: 'basket',
+    reactionPauses: { 4: 450 },
     expressions: [['curious', 'neutral'], ['worried', 'neutral'], ['curious', 'neutral'], ['pleased', 'neutral'], ['pleased', 'annoyed']],
     lines: [
       [0, 'How much is this apple?', clause(noun('apple', { determiner: 'this' }), 'be', undefined, { front: 'how much', question: true })],
@@ -152,7 +159,7 @@ export const SCENES = [
               [0, 'Two coins?', { ...fragment(noun('coin', { determiner: 'two', plural: true })), question: true }],
               [1, 'Two coins. The leaf is my leaf.', fragment(noun('coin', { determiner: 'two', plural: true })), clause(noun('leaf', { determiner: 'the' }), 'be', noun('leaf', { determiner: 'my' }))],
             ] },
-            { id: 'one-coin', expressions: [['worried', 'annoyed'], ['startled', 'pleased']], lines: [
+            { id: 'one-coin', reactionPauses: { 1: 500 }, expressions: [['worried', 'annoyed'], ['startled', 'pleased']], lines: [
               [0, 'One coin?', { ...fragment(noun('coin', { determiner: 'one' })), question: true }],
               [1, 'One leaf.', fragment(noun('leaf', { determiner: 'one' }))],
             ] },
@@ -171,6 +178,7 @@ export const SCENES = [
     id: 'busstop', name: 'The bus stop', location: 'Rain, with more rain expected',
     description: 'A wet street, a small shelter, and a timetable with an optimistic view of the afternoon.',
     tag: 'Something is on time', characters: ['rook', 'brine'], prop: 'umbrella',
+    reactionPauses: { 2: 350, 4: 500 },
     expressions: [['worried', 'neutral'], ['curious', 'neutral'], ['annoyed', 'neutral'], ['annoyed', 'neutral'], ['annoyed', 'pleased']],
     lines: [
       [0, 'Is the bus late?', clause(noun('bus', { determiner: 'the' }), 'be', 'late', { question: true })],
@@ -184,15 +192,16 @@ export const SCENES = [
         id: 'introductions', title: 'An introduction', tag: 'A passing feeling',
         description: 'Two travelers introduce themselves beneath the shelter. One finds the feeling temporary.',
         animation: { type: 'introductions', lookAwayLine: 3 },
+        reactionPauses: { 3: 400 },
         expressions: [['neutral', 'curious'], ['curious', 'neutral'], ['pleased', 'neutral'], ['annoyed', 'neutral']],
         choice: {
           afterLine: 1, prompt: 'What do you say?',
           options: [
-            { id: 'pleased', expressions: [['pleased', 'neutral'], ['annoyed', 'neutral']], lines: [
+            { id: 'pleased', reactionPauses: { 1: 400 }, expressions: [['pleased', 'neutral'], ['annoyed', 'neutral']], lines: [
               [0, 'I am pleased to meet you.', clause('i', 'be', sequence('pleased', clause(undefined, 'meet', 'you', { front: 'to' })))],
               [1, 'That should pass.', clause('that', 'pass', undefined, { modal: 'should' })],
             ] },
-            { id: 'quiet-friend', expressions: [['worried', 'curious'], ['startled', 'annoyed']], lines: [
+            { id: 'quiet-friend', reactionPauses: { 1: 500 }, expressions: [['worried', 'curious'], ['startled', 'annoyed']], lines: [
               [0, 'I need a quiet friend.', clause('i', 'need', noun('friend', { determiner: 'a', adjectives: ['quiet'] }))],
               [1, 'Then goodbye.', fragment('then', 'goodbye')],
             ] },
@@ -211,6 +220,7 @@ export const SCENES = [
     id: 'library', name: 'The library', location: 'Please keep the door quiet',
     description: 'Tall shelves, a reading desk, and a search for a book that makes less noise.',
     tag: 'A quiet recommendation', characters: ['hush', 'slate'], prop: 'book',
+    reactionPauses: { 3: 500 },
     expressions: [['worried', 'neutral'], ['worried', 'annoyed'], ['startled', 'curious'], ['annoyed', 'neutral'], ['annoyed', 'pleased']],
     lines: [
       [0, 'I need a quiet book.', clause('i', 'need', noun('book', { determiner: 'a', adjectives: ['quiet'] }))],
@@ -224,16 +234,17 @@ export const SCENES = [
         id: 'lost-property', title: 'Lost property', tag: 'An unfortunate coincidence',
         description: 'A book crosses the library desk. The name inside does little to settle its ownership.',
         animation: { type: 'lost-property', offerLine: 0, returnLine: 3 },
+        reactionPauses: { 3: 450 },
         expressions: [['curious', 'worried'], ['curious', 'worried'], ['annoyed', 'worried'], ['annoyed', 'neutral']],
         choice: {
           afterLine: 0, prompt: 'What do you say?',
           options: [
-            { id: 'deny', expressions: [['curious', 'worried'], ['annoyed', 'worried'], ['annoyed', 'neutral']], lines: [
+            { id: 'deny', reactionPauses: { 2: 450 }, expressions: [['curious', 'worried'], ['annoyed', 'worried'], ['annoyed', 'neutral']], lines: [
               [1, 'No. It is not my book.', fragment('no'), clause('it', 'be', noun('book', { determiner: 'my' }), { negative: true })],
               [0, 'Your name is inside.', clause(noun('name', { determiner: 'your' }), 'be', 'inside')],
               [1, 'An unfortunate coincidence.', fragment(noun('coincidence', { determiner: 'a', adjectives: ['unfortunate'] }))],
             ] },
-            { id: 'claim', expressions: [['curious', 'pleased'], ['curious', 'worried'], ['startled', 'worried']], lines: [
+            { id: 'claim', reactionPauses: { 2: 500 }, expressions: [['curious', 'pleased'], ['curious', 'worried'], ['startled', 'worried']], lines: [
               [1, 'Yes. I need that book.', fragment('yes'), clause('i', 'need', noun('book', { determiner: 'that' }))],
               [0, 'Your name is inside.', clause(noun('name', { determiner: 'your' }), 'be', 'inside')],
               [1, 'I need a new name.', clause('i', 'need', noun('name', { determiner: 'a', adjectives: ['new'] }))],
@@ -253,6 +264,7 @@ export const SCENES = [
     id: 'cafe', name: 'The café', location: 'A table beside the window',
     description: 'A small café with warm lamps, an empty cup, and the beginning of a very slow tea.',
     tag: 'The first ingredient', characters: ['shard', 'vesper'], prop: 'cup',
+    reactionPauses: { 1: 350 },
     expressions: [['neutral', 'neutral'], ['startled', 'neutral'], ['annoyed', 'neutral'], ['annoyed', 'neutral'], ['worried', 'pleased']],
     lines: [
       [0, 'One hot tea, please.', polite(noun('tea', { determiner: 'one', adjectives: ['hot'] }))],
@@ -266,15 +278,16 @@ export const SCENES = [
         id: 'cold-tea', title: 'Cold tea', tag: 'A matter of time',
         description: 'The tea arrives hot. The proposed correction requires no effort from the café.',
         animation: { type: 'cold-tea', coolLine: 3 },
+        reactionPauses: { 3: 450 },
         expressions: [['annoyed', 'neutral'], ['annoyed', 'neutral'], ['annoyed', 'neutral'], ['annoyed', 'pleased']],
         choice: {
           afterLine: 1, prompt: 'What do you say?',
           options: [
-            { id: 'cold-tea', expressions: [['annoyed', 'neutral'], ['annoyed', 'pleased']], lines: [
+            { id: 'cold-tea', reactionPauses: { 1: 450 }, expressions: [['annoyed', 'neutral'], ['annoyed', 'pleased']], lines: [
               [0, 'I asked for cold tea.', clause('i', 'ask', sequence('for', noun('tea', { adjectives: ['cold'] })), { tense: 'past' })],
               [1, 'Then wait.', clause(undefined, 'wait', undefined, { front: 'then' })],
             ] },
-            { id: 'wait', expressions: [['neutral', 'pleased'], ['annoyed', 'pleased']], lines: [
+            { id: 'wait', reactionPauses: { 1: 350 }, expressions: [['neutral', 'pleased'], ['annoyed', 'pleased']], lines: [
               [0, 'I can wait.', clause('i', 'wait', undefined, { modal: 'can' })],
               [1, 'Good. I can sleep.', fragment('good'), clause('i', 'sleep', undefined, { modal: 'can' })],
             ] },
@@ -293,6 +306,7 @@ export const SCENES = [
     id: 'tickets', name: 'The ticket counter', location: 'A station quite far inland',
     description: 'A ticket window, a platform clock, and a traveler trying to make the sea a little closer.',
     tag: 'Distance is not a quantity', characters: ['brine', 'rook'], prop: 'ticket',
+    reactionPauses: { 4: 500 },
     expressions: [['pleased', 'neutral'], ['curious', 'neutral'], ['worried', 'neutral'], ['startled', 'neutral'], ['curious', 'annoyed']],
     lines: [
       [0, 'One ticket to the sea.', fragment(noun('ticket', { determiner: 'one', modifiers: [sequence('to', noun('sea', { determiner: 'the' }))] }))],
@@ -321,6 +335,7 @@ export const SCENES = [
     id: 'rooftop', name: 'The rooftop', location: 'Above the evening windows',
     description: 'A quiet roof above a scattered city skyline, where some stars still have their curtains open.',
     tag: 'A mostly accurate sky', characters: ['moss', 'hush'], prop: 'star',
+    reactionPauses: { 3: 400 },
     expressions: [['pleased', 'neutral'], ['startled', 'neutral'], ['curious', 'neutral'], ['annoyed', 'neutral'], ['worried', 'neutral']],
     lines: [
       [0, 'The stars are bright.', clause(noun('star', { determiner: 'the', plural: true }), 'be', 'bright')],
@@ -362,6 +377,7 @@ export const SCENES = [
     id: 'apothecary', name: 'The apothecary', location: 'One minute before closing',
     description: 'Colored bottles, a low amber lamp, and a sleep remedy with an encouraging effect on opening hours.',
     tag: 'An early demonstration', characters: ['kiln', 'shard'], prop: 'bottle',
+    reactionPauses: { 3: 500 },
     expressions: [['worried', 'neutral'], ['curious', 'neutral'], ['curious', 'neutral'], ['startled', 'neutral'], ['pleased', 'neutral']],
     lines: [
       [0, 'I need a bottle of sleep.', clause('i', 'need', noun('bottle', { determiner: 'a', modifiers: [sequence('of', 'sleep')] }))],

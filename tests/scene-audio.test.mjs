@@ -9,7 +9,7 @@ import { TextAudio } from '../src/text-audio.js';
 function audioBoundary({ enabled = true, supported = true } = {}) {
   const listeners = new Set();
   return {
-    enabled, supported, ready: true, calls: [], stops: 0, destroys: 0, unlocks: 0,
+    enabled, supported, ready: true, calls: [], effects: [], stops: 0, destroys: 0, unlocks: 0,
     subscribe(callback) {
       listeners.add(callback);
       callback(this);
@@ -18,6 +18,8 @@ function audioBoundary({ enabled = true, supported = true } = {}) {
     setEnabled(value) { this.enabled = Boolean(value); for (const callback of listeners) callback(this); },
     async unlock() { this.unlocks++; },
     blip(character, voiceId) { this.calls.push([character, voiceId]); },
+    effect(name) { if (this.ready) this.effects.push(name); },
+    playText() {},
     stop() { this.stops++; },
     destroy() { this.destroys++; },
     get subscribers() { return listeners.size; },
@@ -57,6 +59,43 @@ function fixture(t, audio = audioBoundary(), { reduced = false } = {}) {
   const advance = (milliseconds = 43) => player.tick(player.lastTime + milliseconds);
   return { player, audio, document, motion, language, line, advance };
 }
+
+test('contact cues play once at contact, remain silent during redraw and replay after restart', t => {
+  const {player,audio} = fixture(t);
+  const contact = player.timing.offerStart + 385;
+  player.elapsed = contact - 10; player.render();
+  player.elapsed = contact + 10; player.render({audible:true});
+  assert.deepEqual(audio.effects, ['thud']);
+  player.render({audible:true}); player.render();
+  assert.deepEqual(audio.effects, ['thud']);
+  player.replay();
+  player.elapsed = contact - 10; player.render();
+  player.elapsed = contact + 10; player.render({audible:true});
+  assert.deepEqual(audio.effects, ['thud','thud']);
+});
+
+test('muted, hidden, paused and locked playback never backfills contacts when resumed', t => {
+  const {player,audio,document} = fixture(t);
+  const contact = player.timing.offerStart + 385;
+  for (const state of ['muted','hidden','paused','locked']) {
+    player.elapsed = contact - 10; player.render();
+    audio.setEnabled(state !== 'muted'); document.hidden = state === 'hidden';
+    player.paused = state === 'paused'; audio.ready = state !== 'locked';
+    player.elapsed = contact + 10; player.render({audible:true});
+    audio.setEnabled(true); document.hidden=false; player.paused=false; audio.ready=true;
+    player.elapsed += 10; player.render({audible:true});
+  }
+  assert.deepEqual(audio.effects, []);
+});
+
+test('reduced motion suppresses footsteps but keeps the semantic contact cue', t => {
+  const {player,audio} = fixture(t, audioBoundary(), {reduced:true});
+  player.paused=false;
+  player.elapsed=130; player.render(); player.elapsed=150; player.render({audible:true});
+  const contact=player.timing.offerStart+385;
+  player.elapsed=contact-10; player.render(); player.elapsed=contact+10; player.render({audible:true});
+  assert.deepEqual(audio.effects,['thud']);
+});
 
 // Keep the real burst scheduler and PCM synthesis; substitute only Web Audio
 // output and the clock so a source that is started and immediately stopped fails.

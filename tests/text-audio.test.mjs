@@ -386,3 +386,76 @@ test('destroy closes owned context and removes gesture and lifecycle listeners',
   f.advance(5000);
   assert.equal(f.outputs.length, 0);
 });
+
+test('contacts mix with speech without sharing its throttle or replacing its queued burst', async () => {
+  const f = fixture();
+  assert.equal(typeof f.audio.effect, 'function');
+  await f.audio.unlock();
+  assert.equal(f.audio.effect('thud'), true);
+  assert.equal(f.audio.blip('a'), true, 'A contact cannot suppress a simultaneous voice');
+  assert.equal(f.audio.effect('clink'), true, 'Speech cannot suppress a simultaneous contact');
+  assert.equal(f.audio.blip('b'), false, 'Speech keeps its existing throttle');
+  const contact = f.outputs[0].source;
+  f.audio.playText('abc', { delay: 150 });
+  assert.equal(contact.stopped, false, 'Replacing speech does not truncate a contact');
+  f.audio.effect('tap');
+  f.advance(200);
+  assert.ok(f.outputs.some(output => output.at === 150), 'A contact does not cancel queued speech');
+  f.audio.stop();
+  assert.ok(f.outputs.every(output => output.source.stopped));
+  f.audio.destroy();
+});
+
+test('contacts use cached buffers and a bounded number of concurrent sources', async () => {
+  const f = fixture();
+  assert.equal(typeof f.audio.effect, 'function');
+  await f.audio.unlock();
+  for (let i = 0; i < 4; i++) assert.equal(f.audio.effect('tap'), true);
+  assert.equal(f.audio.effect('tap'), false, 'Four active contacts bound simultaneous output');
+  assert.equal(f.outputs.length, 4);
+  assert.equal(f.outputs[0].source.buffer, f.outputs[1].source.buffer, 'Repeated contacts reuse PCM buffers');
+  f.outputs[0].source.onended();
+  assert.equal(f.outputs[0].source.disconnected, true);
+  assert.equal(f.audio.effect('tap'), true, 'Completed sounds release their slot');
+  f.audio.stop();
+  assert.equal(f.outputs[0].source.stopped, false, 'An ended source is not stopped again');
+  assert.equal(f.audio.effect('tap'), true, 'Stop releases all contact slots');
+  assert.equal(f.outputs[5].source.buffer, f.outputs[1].source.buffer, 'Stop preserves the small reusable cache');
+  assert.equal(f.audio.effect(['tap']), false, 'Only palette names can add cached buffers');
+  assert.equal(f.audio.effect({ toString: () => 'tap' }), false);
+  f.audio.destroy();
+});
+
+test('contacts stay lazy and never replay old hits when a pending unlock completes', async () => {
+  let resolve;
+  const f = fixture({ suspended: true, resume: () => new Promise(done => { resolve = done; }) });
+  assert.equal(typeof f.audio.effect, 'function');
+  assert.equal(f.audio.effect('step'), false);
+  assert.equal(f.contexts.length, 0);
+  const unlocking = f.audio.unlock();
+  assert.equal(f.audio.effect('step'), false);
+  resolve(); await unlocking;
+  assert.equal(f.outputs.length, 0, 'Missed contacts are not queued');
+  assert.equal(f.audio.effect('step'), true);
+  assert.equal(f.audio.effect('unknown'), false);
+  assert.equal(f.outputs.length, 1);
+  f.audio.destroy();
+});
+
+test('mute, hiding, suspension and destruction silence contacts with the shared lifecycle', async () => {
+  for (const reason of ['mute', 'hidden', 'pagehide', 'suspended', 'destroy']) {
+    const f = fixture();
+    assert.equal(typeof f.audio.effect, 'function');
+    await f.audio.unlock();
+    f.audio.effect('slide');
+    if (reason === 'mute') f.audio.setEnabled(false);
+    if (reason === 'hidden') { f.document.hidden = true; f.document.dispatch('visibilitychange'); }
+    if (reason === 'pagehide') f.window.dispatch('pagehide');
+    if (reason === 'suspended') { f.contexts[0].state = 'suspended'; f.contexts[0].dispatch('statechange'); }
+    if (reason === 'destroy') f.audio.destroy();
+    assert.equal(f.outputs[0].source.stopped, true, reason);
+    assert.equal(f.outputs[0].source.disconnected, true, reason);
+    if (reason !== 'pagehide') assert.equal(f.audio.effect('swish'), false, reason);
+    f.audio.destroy();
+  }
+});

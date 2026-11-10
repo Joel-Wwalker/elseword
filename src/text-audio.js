@@ -1,6 +1,9 @@
+import { makeEffectSamples } from './scene-sounds.js';
+
 const PREFERENCE_KEY = 'little-languages:text-sounds';
 const BLIP_INTERVAL = 40;
 const MAX_BURST = 1200;
+const MAX_EFFECTS = 4;
 
 // Original pulse voices: pitch, pulse width, brightness, duration and level.
 // These are synthesized locally; no recordings or game audio are used.
@@ -64,6 +67,8 @@ export class TextAudio {
     try { this.enabled = this._storage?.getItem(PREFERENCE_KEY) !== 'false'; } catch { /* Storage can be blocked. */ }
     this._subscribers = new Set();
     this._sources = new Set();
+    this._effects = new Set();
+    this._effectBuffers = new Map();
     this._listeners = [];
     this._context = null;
     this._resumePromise = null;
@@ -168,6 +173,41 @@ export class TextAudio {
     return this._playCharacter(character, voiceId);
   }
 
+  // Contacts are immediate: a hit missed while locked is never replayed later.
+  effect(effect) {
+    if (this._destroyed || !this.enabled || !this.ready || this._hidden() || this._effects.size >= MAX_EFFECTS) return false;
+    let source;
+    try {
+      let buffer = this._effectBuffers.get(effect);
+      if (!buffer) {
+        const sampleRate = this._context.sampleRate || 22050;
+        const samples = makeEffectSamples(effect, sampleRate);
+        if (!samples.length) return false;
+        buffer = this._context.createBuffer(1, samples.length, sampleRate);
+        buffer.getChannelData(0).set(samples);
+        this._effectBuffers.set(effect, buffer);
+      }
+      source = this._context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this._context.destination);
+      source.onended = () => {
+        this._effects.delete(source);
+        source.onended = null;
+        try { source.disconnect(); } catch { /* Already disconnected. */ }
+      };
+      this._effects.add(source);
+      source.start();
+      return true;
+    } catch {
+      if (source) {
+        this._effects.delete(source);
+        source.onended = null;
+        try { source.disconnect(); } catch { /* Partial node creation can fail. */ }
+      }
+      return false;
+    }
+  }
+
   _playCharacter(character, voiceId, remaining = Infinity) {
     if (this._destroyed || !this.enabled || !this.ready || this._hidden() || !isAudibleCharacter(character)) return false;
     const now = this._now();
@@ -202,7 +242,7 @@ export class TextAudio {
   }
 
   playText(text, { voiceId = 'narrator', maxDuration = MAX_BURST, delay = 0 } = {}) {
-    this.stop();
+    this._stopSpeech();
     if (this._destroyed || !this.enabled || !this.supported || this._hidden() || (!this.ready && !this._resumePromise)) return;
     const duration = Number.isFinite(maxDuration) ? Math.max(0, Math.min(MAX_BURST, maxDuration)) : MAX_BURST;
     if (!duration) return;
@@ -246,7 +286,7 @@ export class TextAudio {
     } else this._pending = null;
   }
 
-  stop() {
+  _stopSpeech() {
     this._pending = null;
     if (this._timer !== null) this._clearTimeout(this._timer);
     this._timer = null;
@@ -258,10 +298,21 @@ export class TextAudio {
     this._sources.clear();
   }
 
+  stop() {
+    this._stopSpeech();
+    for (const source of this._effects) {
+      source.onended = null;
+      try { source.stop(); } catch { /* A source may have just ended. */ }
+      try { source.disconnect(); } catch { /* Already disconnected. */ }
+    }
+    this._effects.clear();
+  }
+
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
     this.stop();
+    this._effectBuffers.clear();
     for (const remove of this._listeners) remove();
     this._listeners.length = 0;
     this.ready = false;
