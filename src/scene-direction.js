@@ -51,7 +51,16 @@ export function sampleCamera({ time = 0, speaker = 0, previousSpeaker = speaker,
 export function sampleAtmosphere(id, time, { reduced = false } = {}) {
   return {
     opacity: reduced ? 0.35 : id === 'rooftop' ? 0.4 + Math.floor(time / 600) % 2 * 0.4 : 0.5,
-    x: id === 'busstop' && !reduced ? -Math.floor(time / 80) % 5 : 0,
-    y: id === 'busstop' && !reduced ? Math.floor(time / 40) % 13 : 0,
   };
+}
+
+/** Each drop completes its fall before restarting above the visible street. */
+export function sampleRain(time = 0, { reduced = false } = {}) {
+  const clock = reduced || !Number.isFinite(time) ? 0 : Math.max(0, time);
+  return Array.from({ length: 34 }, (_, index) => {
+    const height = 4 + index % 3 * 2;
+    const distance = 184 - 23 + height;
+    const fall = (index * 37 + Math.floor(clock * (70 + index % 4 * 12) / 1000)) % distance;
+    return { x: 31 + index * 73 % 330 - Math.floor(fall / 24), y: 23 - height + fall, width: 1, height };
+  });
 }

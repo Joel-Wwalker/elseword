@@ -5,6 +5,7 @@ import * as geometry from '../src/scene-layout.js';
 import { buildDialogue, ScenePlayer } from '../src/scene-player.js';
 import { createLanguage } from '../src/engine.js';
 import { SCENES } from '../src/scenes.js';
+import { sampleRain } from '../src/scene-direction.js';
 
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} ≠ ${expected}`);
 const bookBounds = frame => [
@@ -193,9 +194,13 @@ test('World facial cues follow dialogue and contacts without sticking after a re
 test('World rain and rooftop stars retain the same sampled atmosphere during seeks and reduced motion', () => {
   const player = playerFixture();
   player.setScene('busstop');
-  for (const [time, reduced, transform, opacity] of [[1000, false, 'translate(-2 12)', '0.5'], [1080, false, 'translate(-3 1)', '0.5'], [1080, true, 'translate(0 0)', '0.35']]) {
+  const rainNode = player.rainDrops;
+  for (const [time, reduced, opacity] of [[400, false, '0.5'], [520, false, '0.5'], [1080, false, '0.5'], [1080, true, '0.35'], [400, false, '0.5']]) {
     player.elapsed = time; player.motion.matches = reduced; player.render();
-    assert.equal(player.rainDrops.attributes.transform, transform);
+    assert.equal(player.rainDrops, rainNode, 'Rain updates one persistent path');
+    const rectangles = [...rainNode.attributes.d.matchAll(/M(-?\d+) (-?\d+)h(\d+)v(\d+)h-\d+Z/gu)].map(match => match.slice(1).map(Number));
+    assert.deepEqual(rectangles, sampleRain(time, { reduced }).map(({ x, y, width, height }) => [x, y, width, height]));
+    assert.equal(rainNode.attributes.transform, undefined, 'The rain field and shelter mask never translate');
     assert.equal(player.ambient.style.opacity, opacity);
   }
   player.setScene('rooftop');
