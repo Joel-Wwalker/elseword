@@ -76,7 +76,7 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
     <header class="sm-header"><div class="sm-heading"><h1 tabindex="-1" id="sm-title">Scene editor</h1><p id="sm-local-status" role="status"></p></div><div class="sm-actions"><button class="primary-button" id="sm-save-local" title="Save this scene on this device">Save</button><button class="secondary-button" id="sm-video-export" aria-controls="sm-video-panel">Export video</button><button class="text-button" id="sm-undo" disabled>Undo</button><button class="text-button" id="sm-close">Back to world</button></div></header>
     <p id="sm-error" class="sm-error" role="alert"></p><p id="sm-notice" class="sm-notice" role="status"></p><p id="sm-video-limit" class="sm-notice" role="status"></p>
     <details class="sm-setup"><summary>Scene settings <span id="sm-setup-summary">Name, room, cast and language</span></summary>
-      <div class="sm-setup-grid"><label>Scene name<input id="sm-name" maxlength="80"></label><label>Room<select id="sm-room">${SCENES.map(scene => option(scene.id, scene.name)).join('')}</select></label><label>First character<select id="sm-cast-0">${CHARACTERS.map(person => option(person.id, person.name)).join('')}</select></label><label>Second character<select id="sm-cast-1">${CHARACTERS.map(person => option(person.id, person.name)).join('')}</select></label><label>Prop<select id="sm-prop">${SCENE_PROPS.map(prop => option(prop, prop[0].toUpperCase() + prop.slice(1))).join('')}</select></label><label>Captions<select id="sm-captions"><option value="both">Both languages</option><option value="language">Your language</option><option value="english">English</option></select></label><label class="sm-checkbox"><input id="sm-sound" type="checkbox"> Dialogue sounds</label><div class="sm-language"><p id="sm-language-name"></p><button class="text-button" id="sm-use-language">Update from studio language</button><small>The scene keeps a copy of its language. Update it to use your latest words and grammar.</small></div></div>
+      <div class="sm-setup-grid"><label>Scene name<input id="sm-name" maxlength="80"></label><label>Room<select id="sm-room">${SCENES.map(scene => option(scene.id, scene.name)).join('')}</select></label><label>First character<select id="sm-cast-0">${CHARACTERS.map(person => option(person.id, person.name)).join('')}</select></label><label>Second character<select id="sm-cast-1">${CHARACTERS.map(person => option(person.id, person.name)).join('')}</select></label><label>Prop<select id="sm-prop">${SCENE_PROPS.map(prop => option(prop, prop[0].toUpperCase() + prop.slice(1))).join('')}</select></label><label>Captions<select id="sm-captions"><option value="both">Both languages</option><option value="language">Your language</option><option value="english">English</option></select></label><label class="sm-checkbox"><input id="sm-sound" type="checkbox"> Scene sounds</label><div class="sm-language"><p id="sm-language-name"></p><button class="text-button" id="sm-use-language">Update from studio language</button><small>The scene keeps a copy of its language. Update it to use your latest words and grammar.</small></div></div>
       <div class="sm-remix"><label>Start from a conversation<select id="sm-template"></select></label><label id="sm-choice-label" hidden>Reply<select id="sm-choice"></select></label><button class="secondary-button" id="sm-remix">Use conversation</button><button class="text-button" id="sm-blank">Start blank</button><span class="sm-help">Undo restores the previous scene.</span></div>
     </details>
     <div class="sm-workspace">
@@ -166,13 +166,16 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
     const active = compiled.beats.findIndex(beat => position >= beat.start && position < beat.end);
     host.querySelectorAll('[data-sm-beat]').forEach(button => button.classList.toggle('is-playing', playing && Number(button.dataset.smBeat) === active));
   }
-  function resetAudioIndex() { audioIndex = compiled.audioEvents.findIndex(event => event.time >= position); if (audioIndex < 0) audioIndex = compiled.audioEvents.length; }
+  function resetAudioIndex() { audioIndex = compiled.audioEvents.findIndex(event => event.time > position); if (audioIndex < 0) audioIndex = compiled.audioEvents.length; }
   function tick(now) {
     if (!playing || disposed || !opened) return;
     const elapsed = Math.min(250, now - lastTick); lastTick = now; position = Math.min(compiled.duration, position + elapsed);
     while (audioIndex < compiled.audioEvents.length && compiled.audioEvents[audioIndex].time <= position) {
       const event = compiled.audioEvents[audioIndex++];
-      if (project.sound && position - event.time < 150) audio.blip(event.character, event.voice);
+      if (project.sound && position - event.time < 150) {
+        if (event.effect) { if (!reduced() || !event.motionOnly) audio.effect(event.effect); }
+        else audio.blip(event.character, event.voice);
+      }
     }
     draw();
     if (position >= compiled.duration) pause(); else frame = requestAnimationFrame(tick);

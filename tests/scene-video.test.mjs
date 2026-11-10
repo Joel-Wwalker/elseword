@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createLanguage } from '../src/engine.js';
 import { createSceneProject } from '../src/scene-project.js';
 import { createVideoExporter, selectRecordingFormat } from '../src/scene-video.js';
+import { makeEffectSamples } from '../src/scene-sounds.js';
 
 const scene = () => {
   const project = createSceneProject(createLanguage({name:'Video test'}));
@@ -61,6 +62,19 @@ test('recording chooses only supported formats and never disguises WebM as MP4',
   assert.equal(selectRecordingFormat({isTypeSupported:t=>t==='video/webm;codecs=vp8,opus'}).extension,'webm');
   assert.equal(selectRecordingFormat({isTypeSupported:t=>t==='video/mp4'}).extension,'mp4');
   assert.throws(()=>selectRecordingFormat({isTypeSupported:()=>false}),/support/i);
+});
+
+test('video schedules original contact samples on the same clock as the visible landing',async()=>{
+  const h=harness(),project=scene(); project.sound=true;project.beats[0].action='drop';
+  await createVideoExporter(h.env)(project,{canvas:h.canvas,renderer:h.renderer});
+  const compiled=h.frames[0].compiled;
+  const contact=compiled.audioEvents.find(event=>event.effect==='thud');
+  assert.ok(contact);
+  const source=h.sources.find(source=>Math.abs(source.startTime-(0.06+contact.time/1000))<0.00001
+    && source.buffer.getChannelData(0).length===makeEffectSamples('thud',8000).length);
+  assert.ok(source,'Contact reaches the recorded audio track');
+  assert.deepEqual(source.buffer.getChannelData(0),makeEffectSamples('thud',8000));
+  assert.ok(h.sources.every(source=>source.stopped && source.disconnected));
 });
 test('video renders an isolated snapshot, returns the actual format and releases tracks',async()=>{
   const h=harness(), project=scene();

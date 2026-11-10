@@ -6,6 +6,7 @@ import { sampleCamera } from './scene-direction.js';
 import { sampleExpressions } from './scene-expressions.js';
 import { resolveCharacterFace } from './character-faces.js';
 import { faceMarkup } from './character-face-renderer.js';
+import { episodeSoundEvents, crossedSoundEvents } from './scene-sound-events.js';
 
 let facePlayerId = 0;
 
@@ -15,7 +16,8 @@ export function buildDialogue(scene, language) {
   const minimum = scene.episodeId && scene.episodeId !== 'original' ? 5000 : 2600;
   return scene.lines.map(line => {
     const translated = renderSceneLine(line, language);
-    const duration = Math.max(minimum, [...translated.text].length * 43 + 1400);
+    const reactionPause = Number.isInteger(line.reactionPauseMs) ? Math.max(0, Math.min(650, line.reactionPauseMs)) : 0;
+    const duration = Math.max(minimum, [...translated.text].length * 43 + 1400) + reactionPause;
     const entry = { line, english: line.english, text: translated.text, tokens: translated.tokens, unknown: translated.unknown,
       start, duration, end: start + duration };
     start += duration;
@@ -368,6 +370,7 @@ export class ScenePlayer {
     this.scene = resolveSceneChoice(this.baseScene || this.scene, this.choiceId);
     this.dialogue = buildDialogue(this.scene, this.getLanguage());
     this.timing = getEpisodeTiming(this.scene, this.dialogue);
+    this.soundEvents = episodeSoundEvents(this.scene, this.timing);
     this.duration = this.dialogue.at(-1).end;
     const entry = this.dialogue[Math.min(oldIndex, this.dialogue.length - 1)];
     this.elapsed = this.awaitingChoice ? this.dialogue[this.scene.choice.afterLine].end - 1
@@ -393,6 +396,7 @@ export class ScenePlayer {
       this.scene = this.baseScene;
       this.dialogue = buildDialogue(this.scene, this.getLanguage());
       this.timing = getEpisodeTiming(this.scene, this.dialogue);
+      this.soundEvents = episodeSoundEvents(this.scene, this.timing);
       this.duration = this.dialogue.at(-1).end;
     }
   }
@@ -417,6 +421,7 @@ export class ScenePlayer {
     this.scene = resolveSceneChoice(this.baseScene, id);
     this.dialogue = buildDialogue(this.scene, this.getLanguage());
     this.timing = getEpisodeTiming(this.scene, this.dialogue);
+    this.soundEvents = episodeSoundEvents(this.scene, this.timing);
     this.duration = this.dialogue.at(-1).end;
     this.elapsed = this.dialogue[this.scene.choice.afterLine + 1].start;
     this.previousIndex = -1;
@@ -599,6 +604,14 @@ export class ScenePlayer {
         }
       }
     }
+    if (audible && !this.paused && !this.awaitingChoice && this.visible && !this.hasWordFocus()
+      && !document.hidden && this.sound && this.textAudio?.ready) {
+      for (const event of crossedSoundEvents(this.soundEvents ?? [], this.effectTime, t, {reduced:this.motion.matches})) {
+        this.textAudio.effect?.(event.effect);
+      }
+    }
+    // Silent renders mark seeks/rebuilds too, so skipped cues never become a backlog.
+    this.effectTime = t;
     this.visibleChars = chars;
     this.renderTextParts(chars);
     this.renderChoices();

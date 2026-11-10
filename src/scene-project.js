@@ -5,6 +5,7 @@ import { getSceneLayout, shouldFlipCharacter } from './scene-layout.js';
 import { isAudibleCharacter } from './text-audio.js';
 import { sampleAction, sampleImpact, sampleCamera } from './scene-direction.js';
 import { SCENE_EXPRESSIONS, sampleExpressions } from './scene-expressions.js';
+import { actionSoundEvents } from './scene-sound-events.js';
 
 export const SCENE_STORAGE_KEY = 'little-languages-sceneprojects-v1';
 export const SCENE_RECOVERY_KEY = `${SCENE_STORAGE_KEY}-recovery`;
@@ -146,7 +147,7 @@ export function createSceneProject(language, { room = 'bakery', episodeId, choic
     const reference = { sceneId: room, episodeId, ...(resolvedChoice ? { choiceId: resolvedChoice } : {}) };
     const selected = templateScene(reference);
     base.name = selected.title;
-    base.beats = selected.lines.map((line, index) => ({ id: `beat-${index + 1}`, speaker: line.speaker, mode: 'template', template: { ...reference, lineIndex: index }, action: index === 1 ? 'pass' : index === selected.lines.length - 1 ? 'recoil' : 'none', cue: 'end', wordIndex: 0, pauseMs: 600, ...(selected.makerActions?.[index] ?? {}) }));
+    base.beats = selected.lines.map((line, index) => ({ id: `beat-${index + 1}`, speaker: line.speaker, mode: 'template', template: { ...reference, lineIndex: index }, action: index === 1 ? 'pass' : index === selected.lines.length - 1 ? 'recoil' : 'none', cue: 'end', wordIndex: 0, ...(selected.makerActions?.[index] ?? {}), pauseMs: (selected.makerActions?.[index]?.pauseMs ?? 600) + (line.reactionPauseMs ?? 0) }));
   } else {
     const known = key => snapshot.words.some(word => word.english === key) ? key : '';
     base.beats = [{ id: 'beat-1', speaker: 0, mode: 'builder', options: { subject: known('i'), verb: known('see'), object: known('moon') }, action: 'none', cue: 'start', wordIndex: 0, pauseMs: 600 }];
@@ -184,7 +185,22 @@ export function compileSceneProject(value) {
     return { ...beat, expressions, text, english, error, quiet, romanized: source.text, start, end, speechEnd, actionAt, characters };
   });
   const errors = beats.flatMap((beat, index) => beat.error ? [{ beatId: beat.id, line: index + 1, message: beat.error }] : []);
-  return { project, beats, duration: cursor, audioEvents, errors };
+  const compiled = { project, beats, duration: cursor, audioEvents, errors };
+  if (project.sound) for (const beat of beats) {
+    if (beat.action === 'pass') {
+      const before = sampleSceneProject(compiled, beat.actionAt).prop;
+      const after = sampleSceneProject(compiled, beat.actionAt + ACTION_DURATION).prop;
+      // Repeated passes can reach the edge of their safe slot. A stationary prop is silent.
+      if (Math.abs(after.x - before.x) < 0.01) continue;
+      if (before.mode === 'sky') {
+        audioEvents.push({time:beat.actionAt + Math.round(ACTION_DURATION * 0.18),effect:'swish',motionOnly:true});
+        continue;
+      }
+    }
+    audioEvents.push(...actionSoundEvents(beat.action, project.prop, {time:beat.actionAt,duration:ACTION_DURATION}));
+  }
+  audioEvents.sort((a, b) => a.time - b.time);
+  return compiled;
 }
 
 /** Drafts can be saved with unfinished lines, but cannot be played or recorded. */

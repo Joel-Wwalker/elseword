@@ -1,5 +1,6 @@
 import { compileSceneProject, validateSceneProject, assertScenePlayable } from './scene-project.js';
 import { makeBlipSamples } from './text-audio.js';
+import { makeEffectSamples } from './scene-sounds.js';
 
 export function selectRecordingFormat(Recorder) {
   if (typeof Recorder?.isTypeSupported !== 'function') throw new Error('This browser does not support video recording. You can still save an editable scene.');
@@ -69,9 +70,9 @@ export function createVideoExporter(environment = globalThis, { createRenderer: 
         for (const track of destination.stream.getAudioTracks()) capture.addTrack(track);
         const buffers=new Map();
         for (const event of compiled.audioEvents) {
-          const key=`${event.voice}:${event.character}`;
+          const key=event.effect ? `effect:${event.effect}` : `voice:${event.voice}:${event.character}`;
           let buffer=buffers.get(key);
-          if (!buffer) { const samples=makeBlipSamples(event.voice,event.character,context.sampleRate);buffer=context.createBuffer(1,samples.length,context.sampleRate);buffer.getChannelData(0).set(samples);buffers.set(key,buffer); }
+          if (!buffer) { const samples=event.effect ? makeEffectSamples(event.effect,context.sampleRate) : makeBlipSamples(event.voice,event.character,context.sampleRate);buffer=context.createBuffer(1,samples.length,context.sampleRate);buffer.getChannelData(0).set(samples);buffers.set(key,buffer); }
           const source=context.createBufferSource();sources.push(source);source.buffer=buffer;source.connect(destination);prepared.push({source,time:event.time});
         }
       }

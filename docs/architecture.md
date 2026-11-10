@@ -33,6 +33,10 @@ Scene lines store `expression` as `auto`, `neutral`, `curious`, `annoyed`, `plea
 
 `text-audio.js` synthesizes short character sounds through Web Audio and manages playback and the studio sound preference. It does not record a microphone or generate speech.
 
+`scene-sounds.js` generates six short contact and movement sounds locally. `scene-sound-events.js` places these cues at the action sampler's contact timestamps, with material-specific sounds for props. World playback consumes fresh timeline crossings; the editor and video export share compiled audio events. Muting, pausing or hiding a scene stops its sounds. Contacts missed before audio activation are discarded. Reduced-motion playback omits movement sounds while retaining contact cues.
+
+Selected built-in lines include a short `reactionPauseMs` after their reading time. Remixing adds that hold once to the line's existing `pauseMs`, so editable scenes need no additional saved fields.
+
 ## Interface styles
 
 `styles.css` provides the main studio layout. `scenes.css`, `cloud.css`, `language-tools.css` and `scene-maker.css` style their respective areas. `interface.css`, `ribbon.css` and `heading-type.css` layer the shared controls, colors and typography. These ordinary stylesheets are loaded in order. Fonts and artwork are served from `src/assets/`.
