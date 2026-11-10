@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { createLanguage, composeSentence } from '../src/engine.js';
 import { validateRulesEdit } from '../src/studio-usability.js';
+import { getWorldPreset } from '../src/world-presets.js';
 
 const app = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
 // Run the actual app functions with only their browser boundaries replaced.
@@ -65,7 +66,7 @@ for (const routeChanged of [false, true]) test(routeChanged
   const routes = [];
   const context = vm.createContext({
     $: get, makerEpoch: 0, makerLoading: pending, sceneMaker: null, makerOpen: false, view: 'world',
-    language: () => ({ id: currentId }), sceneId: 'bakery', episodeSelections: {},
+    language: () => ({ id: currentId }), sceneId: 'bakery', episodeSelections: {}, getWorldPreset,
     currentScene: () => ({ choice: false }), player: { pause() {}, choiceId: null }, textAudio: { stop() {} },
     document: { querySelector: () => node(), querySelectorAll: () => [] },
     showView(view, options) { routes.push({ view, options }); }, notify() {}, closeMakerView() {},
@@ -85,8 +86,8 @@ for (const routeChanged of [false, true]) test(routeChanged
   }
 });
 
-test('opening and closing the scene editor restores focus to its navigation tab', async () => {
-  let focused = '', opened = 0;
+for (const sceneId of ['bakery', 'city', 'apartments', 'nightmarket', 'train']) test(`opening and closing the scene editor from ${sceneId} restores focus to its navigation tab`, async () => {
+  let focused = '', opened = 0, editorOptions;
   const nodes = new Map(), get = id => {
     if (!nodes.has(id)) nodes.set(id, { ...node(), focus() { focused = id; } });
     return nodes.get(id);
@@ -94,9 +95,9 @@ test('opening and closing the scene editor restores focus to its navigation tab'
   const heading = node(), shell = node(), routes = [];
   get('view-world').querySelector = selector => selector === '.page-heading' ? heading : null;
   const context = vm.createContext({
-    $: get, makerEpoch: 0, makerLoading: Promise.resolve({ open() { opened++; } }),
+    $: get, makerEpoch: 0, makerLoading: Promise.resolve({ open(options) { opened++; editorOptions = options; } }),
     sceneMaker: null, makerOpen: false, view: 'world', changingView: false,
-    language: () => ({ id: 'first' }), sceneId: 'bakery', episodeSelections: {},
+    language: () => ({ id: 'first' }), sceneId, episodeSelections: {}, getWorldPreset,
     currentScene: () => ({ choice: false }), player: { pause() {} }, textAudio: { stop() {} },
     worldPreviewAvailable: () => false, matchMedia: () => ({ matches: false }),
     document: { querySelector: selector => selector === '.shell' ? shell : null, querySelectorAll: () => [] },
@@ -105,6 +106,7 @@ test('opening and closing the scene editor restores focus to its navigation tab'
   vm.runInContext(section('function closeMakerView(', "$('remix-scene').onclick"), context);
   await vm.runInContext('openMaker()', context);
   assert.equal(opened, 1);
+  assert.equal(editorOptions.room, 'bakery', 'Fixed World presets open a compatible room in the editor');
   assert.equal(heading.hidden, true);
   assert.equal(get('world-browser').hidden, true);
   vm.runInContext('closeMakerView()', context);
