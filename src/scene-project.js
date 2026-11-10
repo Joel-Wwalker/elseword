@@ -222,7 +222,7 @@ function propFrame(project) {
   let scale, x, y, supportY, mode, slot;
   if (native) {
     ({ x, y, supportY, mode } = layout.prop); scale = layout.prop.scale;
-    slot = COUNTER_SLOTS[project.room]?.slice(0, 2) ?? (mode === 'sky' ? [130, 170] : [45, 90]);
+    slot = COUNTER_SLOTS[project.room]?.slice(0, 2) ?? (mode === 'sky' ? [130, 170] : [45, 113]);
   } else if (COUNTER_SLOTS[project.room]) {
     const [left, right, surface] = COUNTER_SLOTS[project.room];
     slot = [left, right]; supportY = surface; mode = 'counter';

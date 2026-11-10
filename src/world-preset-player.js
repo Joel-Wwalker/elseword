@@ -269,18 +269,24 @@ export class WorldPresetPlayer {
     if (!this.current) return;
     const bounds = this.el.stage.getBoundingClientRect();
     const width = bounds.width || 512, height = bounds.height || width * 320 / 512;
-    this.docked = width < 440;
-    this.el.bubble.classList.toggle('city-bubble-docked', this.docked);
-    if (this.docked && this.el.bubble.parentNode !== this.root) this.root.insertBefore(this.el.bubble, this.el.accessible);
-    else if (!this.docked && this.el.bubble.parentNode !== this.el.stage) this.el.stage.append(this.el.bubble);
-    this.el.leader.hidden = this.docked;
-    if (this.docked) this.el.leader.setAttribute('hidden', ''); else this.el.leader.removeAttribute('hidden');
-    this.el.bubble.style.width = this.docked ? '100%' : `${Math.min(430, width - 16, Math.max(260, width * 0.7))}px`;
-    this.el.bubble.style.maxHeight = `${this.docked ? 260 : Math.max(48, height * 0.58)}px`;
-    this.el.bubble.style.height = 'auto';
     // Reserve the whole line's height before typewriting so its anchor stays still.
     this.renderTextParts(this.letters.length);
-    const bubble = this.el.bubble.getBoundingClientRect();
+    const measure = docked => {
+      this.docked = docked;
+      this.el.bubble.classList.toggle('city-bubble-docked', docked);
+      if (docked && this.el.bubble.parentNode !== this.root) this.root.insertBefore(this.el.bubble, this.el.accessible);
+      else if (!docked && this.el.bubble.parentNode !== this.el.stage) this.el.stage.append(this.el.bubble);
+      this.el.leader.hidden = docked;
+      if (docked) this.el.leader.setAttribute('hidden', ''); else this.el.leader.removeAttribute('hidden');
+      this.el.bubble.style.width = docked ? '100%' : `${Math.min(430, width - 16, Math.max(260, width * 0.7))}px`;
+      this.el.bubble.style.maxHeight = `${docked ? 260 : Math.max(48, height * 0.58)}px`;
+      this.el.bubble.style.height = 'auto';
+      return this.el.bubble.getBoundingClientRect();
+    };
+    let bubble = measure(width < 440);
+    const headTop = this.speakerActor ? (this.speakerActor.y - 28) / 320 * height : height;
+    // A tall line belongs below the map, where it cannot cover its own speaker.
+    if (!this.docked && bubble.height + 22 > headTop) bubble = measure(true);
     this.bubbleBounds = { width: bubble.width, height: bubble.height, stageWidth: width, stageHeight: height };
     this.el.bubble.style.height = `${bubble.height}px`;
     this.manualAdvance = this.el.bubble.scrollHeight > this.el.bubble.clientHeight + 1;
@@ -306,7 +312,8 @@ export class WorldPresetPlayer {
   render({ audible = false } = {}) {
     if (this.destroyed || !this.dialogue) return;
     const current = this.dialogue[this.index];
-    if (this.current !== current) {
+    const lineChanged = this.current !== current;
+    if (lineChanged) {
       this.current = current; this.letters = [...current.text]; this.visibleChars = 0;
       this.reducedAudioLine = null;
       this.el.speaker.textContent = resident(current.speaker).name;
@@ -314,7 +321,7 @@ export class WorldPresetPlayer {
       this.el.translation.hidden = !this.english;
       this.el.text.setAttribute('dir', this.getLanguage()?.script?.direction === 'rtl' ? 'rtl' : 'ltr');
       this.el.bubble.scrollTop = 0;
-      this.buildTextParts(); this.updateTranscript(); this.measureBubble();
+      this.buildTextParts(); this.updateTranscript();
     }
     const chars = this.motion.matches || this.revealed ? this.letters.length : Math.min(this.letters.length, Math.floor(this.elapsed / 43));
     if (audible && this.isActive() && this.sound && this.textAudio.supported && this.textAudio.ready && !this.revealed) {
@@ -345,6 +352,7 @@ export class WorldPresetPlayer {
     }
     this.renderProps(sample.props);
     this.speakerActor = sample.actors.find(actor => actor.id === current.speaker);
+    if (lineChanged) { this.measureBubble(); this.updateHint(); }
     this.positionBubble();
   }
 
@@ -359,7 +367,7 @@ export class WorldPresetPlayer {
         const element = node('div', 'city-prop'); element.dataset.prop = prop.id;
         entry = { element }; this.propNodes.set(prop.id, entry);
       }
-      const appearance = JSON.stringify([prop.type, prop.frame ?? 0, width, height]);
+      const appearance = JSON.stringify([prop.type, prop.frame ?? 0, prop.direction, width, height]);
       if (entry.appearance !== appearance) {
         entry.element.innerHTML = this.preset.renderProp(prop); entry.appearance = appearance;
       }

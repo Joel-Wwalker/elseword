@@ -450,6 +450,7 @@ function castDialog() {
 }
 
 document.addEventListener('click',event=>{
+  if(event.target.closest('.skip-link')){event.preventDefault();$('main').focus();return;}
   const button=event.target.closest('button');if(!button)return;
   if(button.dataset.view)showView(button.dataset.view);
   if(button.dataset.go)showView(button.dataset.go);

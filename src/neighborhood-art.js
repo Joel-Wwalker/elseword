@@ -313,10 +313,9 @@ export function neighborhoodPropSVG(prop = {}) {
     out = frame === 0 ? pan : `<g transform="${transforms[frame]}">${pan}</g>`;
     if (frame === 3) out += rect(2, 19, 14, 1, '#6f7669', ' opacity=".35"');
   } else if (prop.type === 'apartment-drip') {
-    const tops = [3, 5, 7, 4];
-    const y = tops[frame];
-    out = path(`M9 ${y}h2v3h1v4h-1v2H9v-2H8v-4h1z`, '#699897') + rect(9, y + 3, 1, 4, '#c0d2bb');
-    if (frame === 3) out += rect(4, 16, 3, 1, '#8db8ab') + rect(13, 17, 3, 1, '#8db8ab') + rect(9, 18, 3, 1, '#b4ceba');
+    out = frame === 3
+      ? rect(4, 16, 3, 1, '#8db8ab') + rect(13, 17, 3, 1, '#8db8ab') + rect(9, 18, 3, 1, '#b4ceba')
+      : path('M9 3h2v3h1v4h-1v2H9v-2H8v-4h1z', '#699897') + rect(9, 6, 1, 4, '#c0d2bb');
   } else if (prop.type === 'market-steam') {
     const shift = frame % 2;
     const rise = frame > 1 ? 2 : 0;
@@ -336,6 +335,7 @@ export function neighborhoodPropSVG(prop = {}) {
       rect(step ? 4 : 6, 15, 3, step ? 3 : 4, '#586867') + rect(step ? 13 : 12, 15, 3, step ? 4 : 3, '#586867') +
       rect(1, 5, 2, 3, '#afb29b');
     if (frame >= 2) out += rect(14, 14, 6, 3, '#866744') + rect(15, 13, 5, 3, '#d3af76') + rect(17, 13, 1, 2, '#9c754d');
+    if (prop.direction === 'left') out = `<g transform="translate(20 0) scale(-1 1)">${out}</g>`;
   }
   return svg(out, 20, 20);
 }

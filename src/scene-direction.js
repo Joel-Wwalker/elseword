@@ -46,3 +46,12 @@ export function sampleCamera({ time = 0, speaker = 0, previousSpeaker = speaker,
   const kick = impact ? Math.round(impact * 1.5) * (Math.floor(time / 45) % 2 ? -1 : 1) : 0;
   return { scale, x: Math.round(192 * (1 - scale) + pan * entrance + kick), y: Math.round(108 * (1 - scale) + impact) };
 }
+
+/** Room atmosphere follows the same scene clock in the World and recorded frames. */
+export function sampleAtmosphere(id, time, { reduced = false } = {}) {
+  return {
+    opacity: reduced ? 0.35 : id === 'rooftop' ? 0.4 + Math.floor(time / 600) % 2 * 0.4 : 0.5,
+    x: id === 'busstop' && !reduced ? -Math.floor(time / 80) % 5 : 0,
+    y: id === 'busstop' && !reduced ? Math.floor(time / 40) % 13 : 0,
+  };
+}

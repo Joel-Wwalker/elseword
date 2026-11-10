@@ -179,6 +179,42 @@ test('narrow stages dock speech below the city and resizing back restores the an
   assert.equal(player.el.bubble.className.includes('city-bubble-docked'), false);
 });
 
+test('speech docks when its measured height would cover the current speaker', t => {
+  const { player } = fixture(t);
+  player.pause();
+  player.el.stage.getBoundingClientRect = () => ({ width: 478, height: 298.75 });
+  // This height fits above Moss, but not the baker's higher anchor.
+  let measuredHeight = 90;
+  player.el.bubble.getBoundingClientRect = () => ({ width: 334.6, height: measuredHeight });
+  player.resize.callback();
+  assert.equal(player.el.bubble.parentNode, player.el.stage, 'Speech fits above the initial speaker');
+  player.next(); player.next();
+  assert.equal(player.current.speaker, 'kiln');
+  assert.equal(player.el.bubble.parentNode, player.root, 'Speech must move below the scene instead of hiding Kiln');
+  assert.equal(player.el.leader.hidden, true);
+  const line = player.index, time = player.backgroundTime;
+  // The default Velka baker line measures this high at a 700px viewport.
+  measuredHeight = 148.2; player.resize.callback();
+  assert.equal(player.el.bubble.parentNode, player.root);
+  measuredHeight = 72; player.resize.callback();
+  assert.equal(player.el.bubble.parentNode, player.el.stage, 'A fitting line can return above its speaker');
+  const bottom = Number.parseFloat(player.el.bubble.style.top) + measuredHeight;
+  assert.ok(bottom < 107 / 512 * 478, 'The bubble must finish above the top of Kiln’s sprite');
+  assert.equal(player.el.leader.hidden, false);
+  assert.equal(player.index, line); assert.equal(player.backgroundTime, time);
+});
+
+test('a turning prop redraws its facing immediately without replacing its node', t => {
+  const preset = { ...presets.getWorldPreset('nightmarket'), renderProp: prop => `<svg data-facing="${prop.direction}"></svg>` };
+  const { player } = fixture(t, { preset });
+  const prop = { id: 'cat', type: 'market-cat', x: 258, y: 160, frame: 3, direction: 1 };
+  player.renderProps([prop]);
+  const element = player.el.props.children[0];
+  player.renderProps([{ ...prop, direction: -1 }]);
+  assert.equal(player.el.props.children[0], element);
+  assert.match(element.innerHTML, /data-facing="-1"/);
+});
+
 test('docked dialogue keeps playing when only the map scrolls away and stops when the entire player leaves view', t => {
   const { player, advance } = fixture(t);
   player.el.stage.getBoundingClientRect = () => ({ width: 390, height: 243.75 });
@@ -218,10 +254,9 @@ test('long custom words stay complete and keyboard inspectable inside a measured
   const bubble = host.querySelector('.city-bubble'), word = player.el.text.querySelectorAll('button').find(node => [...node.textContent].length >= 600);
   assert.ok(word); assert.equal(word.disabled, false); assert.ok(player.el.text.textContent.includes('𐐀'.repeat(600)));
   word.focus(); assert.equal(player.hasWordFocus(), true);
-  assert.ok(Number.parseFloat(bubble.style.maxHeight) <= 320 - 16);
-  const rect = bubble.getBoundingClientRect();
-  assert.ok(Number.parseFloat(bubble.style.left) >= 0 && Number.parseFloat(bubble.style.left) + rect.width <= 512);
-  assert.ok(Number.parseFloat(bubble.style.top) >= 0 && Number.parseFloat(bubble.style.top) + rect.height <= 320);
+  assert.ok(Number.parseFloat(bubble.style.maxHeight) <= 260);
+  assert.equal(bubble.parentNode, player.root, 'Tall speech remains available below the scene');
+  assert.equal(player.el.leader.hidden, true);
 });
 
 test('overflowing dialogue waits for Next after reveal while street activity continues', t => {

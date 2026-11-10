@@ -6,6 +6,7 @@ import { CORE_VOCAB } from '../src/vocabulary.js';
 import { ensureSceneVocabulary } from '../src/scene-language.js';
 import { CITY_BLOCK, compileCityDialogue } from '../src/city-block.js';
 import { CHARACTERS } from '../src/scenes.js';
+import { neighborhoodPropSVG } from '../src/neighborhood-art.js';
 
 let scenes, dialogue;
 try { scenes = await import('../src/neighborhood-scenes.js'); }
@@ -226,10 +227,72 @@ test('apartment incidents stay inside their rooms and clear of residents and flo
     const prop = world.props[0];
     assert.equal(prop.type, incident === 'pan' ? 'apartment-pan' : 'apartment-drip');
     assert.equal(prop.x, incident === 'pan' ? 146 : 390);
-    assert.ok(prop.y >= (incident === 'pan' ? 106 : 89) && prop.y <= (incident === 'pan' ? 134 : 124));
+    assert.ok(prop.y >= (incident === 'pan' ? 106 : 103) && prop.y <= (incident === 'pan' ? 134 : 140));
     assert.ok(prop.frame <= 3);
   }
   assert.notDeepEqual(sampleApartments(0).props, sampleApartments(250).props);
+});
+
+// Measure the emitted drip's axis-aligned SVG shapes, including the transparent
+// padding around them, so sampler coordinates alone cannot hide an art mismatch.
+function dripBounds(prop) {
+  const markup = neighborhoodPropSVG(prop), points = [];
+  assert.doesNotMatch(markup, /transform=/, 'Drip geometry must be measured after any new transform');
+  for (const [, attrs] of markup.matchAll(/<rect\s([^>]+)\/>/g)) {
+    const value = name => Number(attrs.match(new RegExp(`\\b${name}="([^"]+)"`))[1]);
+    points.push([value('x'), value('y')], [value('x') + value('width'), value('y') + value('height')]);
+  }
+  for (const [, commands] of markup.matchAll(/<path d="([^"]+)"/g)) {
+    let x = 0, y = 0, start;
+    for (const [, command, args] of commands.matchAll(/([a-z])([^a-z]*)/gi)) {
+      const values = args.trim().split(/[\s,]+/).map(Number);
+      if (command === 'M') { [x, y] = values; start = [x, y]; }
+      else if (command === 'H') x = values[0];
+      else if (command === 'h') x += values[0];
+      else if (command === 'V') y = values[0];
+      else if (command === 'v') y += values[0];
+      else if (command.toLowerCase() === 'z') [x, y] = start;
+      else assert.fail(`Unmeasured drip command ${command}`);
+      points.push([x, y]);
+    }
+  }
+  assert.ok(points.length, 'The leak has visible artwork');
+  return {
+    top: prop.y - prop.height + Math.min(...points.map(([, y]) => y)),
+    bottom: prop.y - prop.height + Math.max(...points.map(([, y]) => y)),
+  };
+}
+
+test('visible water falls from the pipe outlet and splashes on the basin rim', () => {
+  const { sampleApartments } = api();
+  const dripAt = time => sampleApartments(time, { incident: 'pipe' }).props[0];
+  assert.equal(dripBounds(dripAt(0)).top, 86, 'The drop begins at the pipe outlet, outside its metal');
+  let previousBottom = 0;
+  for (let time = 0; time < 675; time++) {
+    const bounds = dripBounds(dripAt(time));
+    assert.ok(bounds.top >= 86 && bounds.bottom <= 132, `Water leaves the outlet-to-basin gap at ${time}ms`);
+    assert.ok(bounds.bottom >= previousBottom, `The falling drop moves upward at ${time}ms`);
+    previousBottom = bounds.bottom;
+  }
+  assert.equal(previousBottom, 132, 'The drop reaches the basin before changing to a splash');
+  for (const time of [675, 700, 800, 899]) {
+    const bounds = dripBounds(dripAt(time));
+    assert.equal(bounds.bottom, 132, `The splash must touch the fixed basin rim at ${time}ms`);
+    assert.ok(bounds.top >= 128, 'Only a small splash remains at impact, without a suspended drop');
+  }
+  assert.deepEqual(dripAt(900), dripAt(0), 'Each leak cycle restarts at the outlet');
+});
+
+test('the food thief turns with its route even between matching walking frames', () => {
+  const { sampleNightMarket } = api();
+  const catAt = time => sampleNightMarket(time, { incident: 'theft' }).props.find(prop => prop.id === 'food-thief');
+  const right = catAt(3499), left = catAt(3500);
+  assert.equal(right.frame, left.frame, 'The turn happens without requiring a walking-frame change');
+  assert.equal(right.direction, 'right');
+  assert.equal(left.direction, 'left');
+  assert.doesNotMatch(neighborhoodPropSVG(right), /scale\(-1 1\)/);
+  assert.match(neighborhoodPropSVG(left), /transform="translate\(20 0\) scale\(-1 1\)"/, 'The cat and its food face left together');
+  assert.equal(catAt(7000).direction, 'right', 'The next circuit turns back toward the right');
 });
 
 test('market walkers have separate lanes and the cat carries the only food bowl during theft', () => {

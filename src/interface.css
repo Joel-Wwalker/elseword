@@ -133,9 +133,9 @@ button:disabled { opacity: .45; }
 .search-field input { background: transparent; font-size: 15px; }
 .dictionary-toolbar>select { font-size: 14px; width: 165px; }
 .dictionary-sheet { border: 0; background: transparent; }
-.dictionary-table th { font: 500 12px/1.5 var(--sans); color: var(--muted); text-transform: none; padding: 15px 14px; letter-spacing: 0; border-bottom-color: var(--line); }
+.dictionary-table th { font: 500 12px/1.5 var(--sans); color: var(--muted); text-transform: none; padding: 15px 14px; letter-spacing: 0; border-bottom-color: var(--line); overflow-wrap: anywhere; }
 .dictionary-table td { font-size: 14px; padding: 10px 14px; border-color: var(--line); }
-.dictionary-table .word-detail { font-size: 14px!important; padding: 6px 0; }
+.dictionary-table .word-detail { font-size: 14px!important; padding: 6px 0; max-width: 100%; overflow-wrap: anywhere; }
 .dictionary-input { font: 16px/1.5 var(--sans); min-height: 42px; }
 .keep-button, .reroll-button { width: 44px; height: 44px; }
 .table-bottom { padding: 16px 6px; font-size: 13px; border-top: 0; }
