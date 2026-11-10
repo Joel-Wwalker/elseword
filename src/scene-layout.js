@@ -90,6 +90,18 @@ export function sampleSceneLayout(id, {
     x: x + (role === 0 ? entrance + recoil : 0),
     y: y + (role === 0 ? step : 0),
   }));
+  const idleAfter = [original ? 600 : 0, 0];
+  const busy = (start, duration, roles = [0, 1]) => {
+    if (t >= start) for (const role of roles) idleAfter[role] = Math.max(idleAfter[role], start + duration);
+  };
+  if (original) {
+    if (layout.prop.mode === 'counter') busy(offerStart, 1185);
+    busy(reactionStart, 850);
+  } else if (episodeType === 'introductions') {
+    busy(0, 800, [0]); busy(lookAwayStart, 1600, [0]);
+  } else if (episodeType === 'lost-property') {
+    busy(offerStart, 1000); busy(returnStart, 1100);
+  }
   if (episodeType === 'introductions') characters.forEach((actor, role) => {
     actor.turnScale = role || reduced ? 1
       : t < lookAwayStart ? -1 + 2 * ease(t / 800) : 1 - 2 * ease((t - lookAwayStart) / 1600);
@@ -106,6 +118,7 @@ export function sampleSceneLayout(id, {
     : episodeType === 'cold-tea' ? 0 : prop.mode === 'counter' ? 4 * (1 - delivery) : 0;
   const frame = {
     characters,
+    idleAfter,
     prop: {
       x: prop.x + slide,
       y: prop.y,

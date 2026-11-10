@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SCENES, CHARACTERS } from '../src/scenes.js';
 import { getSceneLayout, sampleSceneLayout, shouldFlipCharacter } from '../src/scene-layout.js';
+import { sampleCharacterIdle } from '../src/scene-idle.js';
 
 const times = [...new Set([
   ...Array.from({ length: 301 }, (_, index) => index * 33),
@@ -15,8 +16,8 @@ const overlaps = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b
 const actorCorners = (actor, role) => {
   const angle = (actor.lean ?? 0) * Math.PI / 180, cosine = Math.cos(angle), sine = Math.sin(angle);
   return [[role ? 6 : 14, 0], [role ? 50 : 59, 0], [role ? 50 : 59, 63], [role ? 6 : 14, 63]]
-    .map(([x, y]) => [actor.x + 32 + (x - 32) * cosine - (y - 64) * sine,
-      actor.y + 64 + (x - 32) * sine + (y - 64) * cosine]);
+    .map(([x, y]) => [actor.x + 32 + (x - 32) * cosine - (y - 64) * (actor.scaleY ?? 1) * sine,
+      actor.y + 64 + (x - 32) * sine + (y - 64) * (actor.scaleY ?? 1) * cosine]);
 };
 const crossesRectangle = (polygon, [left, top, right, bottom]) => {
   const rectangle = [[left, top], [right, top], [right, bottom], [left, bottom]];
@@ -58,7 +59,9 @@ test('all eight scenes keep entrance and reaction poses clear of furniture and r
   for (const scene of SCENES) for (const time of times) for (const reduced of [false, true]) {
     const frame = sampleSceneLayout(scene.id, { time, reduced });
     for (const character of CHARACTERS) for (const role of [0, 1]) {
-      const actor = frame.characters[role];
+      const idle = sampleCharacterIdle(character.id, time, { quietSince: frame.idleAfter[role], reduced });
+      const actor = { ...frame.characters[role], scaleY: idle.scaleY,
+        lean: (frame.characters[role].lean ?? 0) + idle.lean * (role ? -1 : 1) };
       // Conservative alpha bounds after role-facing mirroring, covering every
       // measured pose in all four atlases (64×64 display cells).
       // Both renderers rotate around the feet, at the cell's (32, 64) point.

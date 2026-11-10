@@ -9,7 +9,7 @@ import { TextAudio } from '../src/text-audio.js';
 function audioBoundary({ enabled = true, supported = true } = {}) {
   const listeners = new Set();
   return {
-    enabled, supported, ready: true, calls: [], effects: [], stops: 0, destroys: 0, unlocks: 0,
+    enabled, supported, ready: true, calls: [], effects: [], ambience: [], stops: 0, destroys: 0, unlocks: 0,
     subscribe(callback) {
       listeners.add(callback);
       callback(this);
@@ -19,6 +19,7 @@ function audioBoundary({ enabled = true, supported = true } = {}) {
     async unlock() { this.unlocks++; },
     blip(character, voiceId) { this.calls.push([character, voiceId]); },
     effect(name) { if (this.ready) this.effects.push(name); },
+    setAmbience(room, time) { this.ambience.push({room, time}); },
     playText() {},
     stop() { this.stops++; },
     destroy() { this.destroys++; },
@@ -59,6 +60,21 @@ function fixture(t, audio = audioBoundary(), { reduced = false } = {}) {
   const advance = (milliseconds = 43) => player.tick(player.lastTime + milliseconds);
   return { player, audio, document, motion, language, line, advance };
 }
+
+test('room ambience follows active playback and never starts on a silent redraw', t => {
+  const {player,audio,document} = fixture(t);
+  player.render(); assert.deepEqual(audio.ambience, []);
+  player.elapsed=100; player.render({audible:true});
+  assert.deepEqual(audio.ambience,[{room:'bakery',time:100}]);
+  audio.ambience.length=0;
+  for(const state of ['muted','hidden','paused','locked','offscreen']){
+    audio.setEnabled(state!=='muted'); document.hidden=state==='hidden';
+    player.paused=state==='paused'; audio.ready=state!=='locked';
+    player.visible=state!=='offscreen';
+    player.render({audible:true});
+  }
+  assert.deepEqual(audio.ambience,[]);
+});
 
 test('contact cues play once at contact, remain silent during redraw and replay after restart', t => {
   const {player,audio} = fixture(t);

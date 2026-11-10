@@ -111,7 +111,7 @@ export async function createSceneRenderer(canvas) {
     const atlas = assets.atlases.get(character.atlas), cellWidth = atlas.width / 4, cellHeight = atlas.height / 2;
     context.save(); context.translate(actor.x + 32, actor.y + 64);
     context.rotate(actor.lean * Math.PI / 180);
-    context.scale(actor.flip ? -1 : 1, 1); context.translate(-32, -64);
+    context.scale(actor.flip ? -1 : 1, actor.scaleY ?? 1); context.translate(-32, -64);
     context.drawImage(atlas, actor.pose * cellWidth, character.row * cellHeight, cellWidth, cellHeight, 0, 0, 64, 64);
     const face = resolveCharacterFace(character.id, actor.pose, actor.expression);
     if (face) paintFace(context, assets.atlases.get(face.atlas), face);

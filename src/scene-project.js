@@ -1,3 +1,4 @@
+import { sampleCharacterIdle } from './scene-idle.js';
 import { validateLanguage, composeSentence, renderWriting } from './engine.js';
 import { SCENES, CHARACTERS, getSceneEpisode, resolveSceneChoice } from './scenes.js';
 import { renderSceneLine } from './scene-language.js';
@@ -248,7 +249,10 @@ export function sampleSceneProject(compiled, time, { reduced = false } = {}) {
     const character = CHARACTERS.find(character => character.id === project.cast[role]);
     return { id: character.id, x, y, lean: 0, pose: role === beat.speaker && t < beat.speechEnd ? 1 : 0, flip: shouldFlipCharacter(character.row, role) };
   });
-  const prop = propFrame(project), effects = [], reactionTimes = [[], []];
+  const prop = propFrame(project), effects = [], reactionTimes = [[], []], quietSince = [0, 0];
+  for (const line of compiled.beats) if (line.start <= t) {
+    quietSince[line.speaker] = Math.max(quietSince[line.speaker], line.speechEnd);
+  }
   let impact = 0;
   const facing = actor => (CHARACTERS.find(character => character.id === actor.id).row === 0 ? 1 : -1) * (actor.flip ? -1 : 1);
   for (const action of compiled.beats) {
@@ -256,6 +260,7 @@ export function sampleSceneProject(compiled, time, { reduced = false } = {}) {
     const elapsed = t - action.actionAt, motion = sampleAction(action.action, elapsed, { duration: ACTION_DURATION, reduced });
     const p = motion.progress, actor = actors[action.speaker];
     const role = action.speaker, baseX = layout.positions[role][0];
+    quietSince[role] = Math.max(quietSince[role], action.actionAt + ACTION_DURATION);
     if (action.action === 'walk' && !reduced) {
       const target = Math.abs(actor.x - baseX) > 1 ? baseX : baseX + (role ? -6 : 6);
       actor.x += (target - actor.x) * motion.travel;
@@ -292,6 +297,7 @@ export function sampleSceneProject(compiled, time, { reduced = false } = {}) {
     const propContact = ['pass', 'drop'].includes(action.action) && prop.type !== 'none';
     if (propContact || action.action === 'recoil') {
       const contact = t - motion.impactAge, actorReaction = propContact ? contact : action.actionAt;
+      quietSince[1 - role] = Math.max(quietSince[1 - role], contact + 300);
       if (actorReaction <= t) reactionTimes[role].push(actorReaction);
       if (contact + 100 <= t) reactionTimes[1 - role].push(contact + 100);
       const x = propContact ? prop.x + (prop.shape[0] + prop.shape[2]) * prop.scale / 2 : actor.x + 32;
@@ -308,7 +314,12 @@ export function sampleSceneProject(compiled, time, { reduced = false } = {}) {
     }
   }
   const expressions = sampleExpressions({ time: t, start: beat.start, speaker: beat.speaker, expressions: beat.expressions, expression: beat.expression, reactionTimes });
-  actors.forEach((actor, role) => { actor.expression = expressions[role]; });
+  actors.forEach((actor, role) => {
+    actor.expression = expressions[role];
+    const idle = sampleCharacterIdle(actor.id, t, { quietSince: quietSince[role], reduced });
+    actor.lean += idle.lean * (role ? -1 : 1);
+    actor.scaleY = idle.scaleY;
+  });
   for (const actor of actors) actor.lean = clamp(actor.lean, -3, 3);
   // The rooftop bench reaches x=140; mirrored atlas poses can begin six pixels
   // inside their cell, so even a recoil must keep the cell at or beyond x=134.

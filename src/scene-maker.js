@@ -170,6 +170,7 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
   function tick(now) {
     if (!playing || disposed || !opened) return;
     const elapsed = Math.min(250, now - lastTick); lastTick = now; position = Math.min(compiled.duration, position + elapsed);
+    if (project.sound) audio.setAmbience(project.room, position);
     while (audioIndex < compiled.audioEvents.length && compiled.audioEvents[audioIndex].time <= position) {
       const event = compiled.audioEvents[audioIndex++];
       if (project.sound && position - event.time < 150) {

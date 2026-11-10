@@ -1,3 +1,4 @@
+import { sampleCharacterIdle } from './scene-idle.js';
 import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes, resolveSceneChoice } from './scenes.js';
 import { renderSceneLine } from './scene-language.js';
 import { getSceneLayout, getEpisodeTiming, sampleSceneLayout, shouldFlipCharacter } from './scene-layout.js';
@@ -606,6 +607,7 @@ export class ScenePlayer {
     }
     if (audible && !this.paused && !this.awaitingChoice && this.visible && !this.hasWordFocus()
       && !document.hidden && this.sound && this.textAudio?.ready) {
+      this.textAudio.setAmbience?.(this.scene.id, t);
       for (const event of crossedSoundEvents(this.soundEvents ?? [], this.effectTime, t, {reduced:this.motion.matches})) {
         this.textAudio.effect?.(event.effect);
       }
@@ -644,7 +646,12 @@ export class ScenePlayer {
       sprite.style.left = `${layout.characters[i].x / 384 * 100}%`;
       sprite.style.top = `${layout.characters[i].y / 216 * 100}%`;
       const direction = shouldFlipCharacter(this.cast[i].row, i) ? -1 : 1;
-      sprite.style.transform = `rotate(${layout.characters[i].lean ?? 0}deg) scaleX(${direction * (layout.characters[i].turnScale ?? 1)})`;
+      let quietSince = layout.idleAfter[i];
+      for (const entry of this.dialogue) if (entry.start <= t && entry.line.speaker === i) {
+        quietSince = Math.max(quietSince, entry.start + [...entry.text].length * 43);
+      }
+      const idle = sampleCharacterIdle(this.cast[i].id, t, { quietSince, reduced });
+      sprite.style.transform = `rotate(${(layout.characters[i].lean ?? 0) + idle.lean * (i ? -1 : 1)}deg) scaleX(${direction * (layout.characters[i].turnScale ?? 1)}) scaleY(${idle.scaleY})`;
     });
     const camera = sampleCamera({ time: t, speaker: current.line.speaker, previousSpeaker: this.dialogue[Math.max(0, index - 1)].line.speaker,
       lineStart: current.start, impact: layout.impact, reduced });
