@@ -30,6 +30,10 @@ export const SCENE_VOCAB_ADDITIONS = Object.freeze(entries([
   ['People', 'noun', 'name'],
   ['Descriptions', 'adjective', 'pleased|unfortunate'],
   ['Everyday things', 'noun', 'coincidence'],
+  ['Essentials', 'particle', 'damn|shit'],
+  ['Actions', 'verb', 'forget|order'],
+  ['Everyday things', 'noun', 'wallet|package|wall'],
+  ['Directions', 'particle', 'back'],
 ]));
 
 export const CORE_VOCAB = Object.freeze([...entries(groups), ...SCENE_VOCAB_ADDITIONS]);

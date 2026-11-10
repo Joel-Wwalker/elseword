@@ -187,7 +187,8 @@ test('common profanity is translated as ordinary editable vocabulary without cen
     ['The crappy dragon sleeps.', ['dragon', 'crappy']],
   ];
   for (const [english, additions] of cases) {
-    const result = translateSentence(original, english);
+    const source = { ...original, words: original.words.filter(word => !additions.includes(word.english)) };
+    const result = translateSentence(source, english);
     assert.equal(result.supported, true, `${english}: ${result.warnings}`);
     assert.deepEqual(result.addedWords.map(word => word.english), additions, english);
     assert.ok(result.addedWords.every(word => !word.locked));
@@ -207,7 +208,9 @@ test('swear verbs support ordinary inflections, tense, questions and negation', 
     ['They pissed.', 'piss', 'past'], ['Did you fuck?', 'fuck', 'past'],
     ['I will not piss.', 'piss', 'future'],
   ]) {
-    const result = translateSentence(literalLanguage(), english);
+    const source = literalLanguage();
+    source.words = source.words.filter(word => word.english !== root);
+    const result = translateSentence(source, english);
     assert.equal(result.supported, true, `${english}: ${result.warnings}`);
     assert.deepEqual(result.addedWords.map(word => word.english), [root]);
     assert.equal(result.addedWords[0].pos, 'verb');
@@ -221,6 +224,7 @@ test('swear verbs support ordinary inflections, tense, questions and negation', 
 test('standalone swear expressions coin one stable phrase rather than a false sentence parse', () => {
   for (const phrase of ['shit', 'fuck', 'fuck you', 'damn it', 'bullshit', 'holy shit']) {
     const original = literalLanguage();
+    original.words = original.words.filter(word => word.english !== phrase);
     const result = translateSentence(original, `${phrase}!`);
     assert.equal(result.supported, true, `${phrase}: ${result.warnings}`);
     assert.deepEqual(result.addedWords.map(word => word.english), [phrase]);

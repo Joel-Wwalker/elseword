@@ -29,6 +29,7 @@ No environment file or cloud account is needed for local use or tests.
 - **Languages:** choose sounds, syllable patterns, sound changes and a generation seed. Edit words, keep spellings through regeneration, add related forms and compounds, and import or export vocabulary as CSV.
 - **Grammar and writing:** set word order, adjective placement, plurals and tense, negative and question markers. Build sentences, save a phrasebook, choose a writing preset or map your own symbols, and print a language reference.
 - **Conversations:** explore eight rooms and sixteen conversations with interchangeable characters, reply choices, subtitles and synthesized text sounds. Word edits appear in the dialogue.
+- **City block:** watch eight residents go about their day in a slightly top-down pixel scene. Three short incidents use the active language, with optional English subtitles and clickable words. Walking routes stay the same when the language changes.
 - **Scenes:** arrange dialogue, actions and pauses for two characters and a prop. Keep named scenes on your device, exchange JSON files, and record clips up to 60 seconds in a supported browser.
 
 Word generation is deterministic from the chosen sounds and seed. The sentence builder and built-in dialogue use explicit grammatical structures. The free-text tool looks up dictionary entries; it does not infer grammar from arbitrary text. Text sounds are character effects rather than pronunciation, and writing presets map characters rather than create fonts.
@@ -36,6 +37,8 @@ Word generation is deterministic from the chosen sounds and seed. The sentence b
 Video export uses browser Canvas capture and MediaRecorder. It records at normal playback speed in an active, visible tab, using MP4 when supported or WebM otherwise.
 
 Residents occasionally shift their posture between lines and actions; reduced motion disables these idles. The bakery, bus stop and rooftop have quiet synthesized room ambience. It follows the existing sound controls, stops when playback pauses or the preview is hidden, and is included in videos with scene sound enabled.
+
+The city is a World preset with a fixed cast and layout. The scene editor and video export use the two-character rooms. City playback pauses with the existing hide control, and reduced motion keeps its residents still.
 
 ## Saving your work
 

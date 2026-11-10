@@ -23,6 +23,8 @@ The sentence builder uses explicit subject, verb, object and modifier choices. B
 
 `scenes.js` supplies the characters, rooms and authored conversations. `scene-language.js` renders their language structures and adds required vocabulary without replacing existing edits. `scene-player.js` presents these conversations using the shared layout geometry in `scene-layout.js`.
 
+`city-block.js` defines the city preset's authored dialogue and samples resident positions from an independent street clock. `city-art.js` draws the block and miniature residents as local SVG geometry. `city-player.js` renders writing-aware, inspectable speech bubbles and shares the World playback lifecycle and text audio. Changing languages rebuilds dialogue without restarting walking routes. Switching between a room and the city disposes the previous player's listeners and animation frame. The city is not part of the portable two-character scene format.
+
 Opening the scene editor loads `scene-maker.js` on demand. It owns editor state, undo, current-draft recovery, named local scenes and cloud scene controls. A scene stores its own language snapshot, so changing a studio language does not silently rewrite an existing scene.
 
 `scene-project.js` validates portable scene documents and compiles their dialogue and actions into a timed sequence. `scene-renderer.js` draws that sequence on a canvas. The editor preview and `scene-video.js` use the same renderer; the video module is loaded when needed and records a browser-generated stream with MediaRecorder.
