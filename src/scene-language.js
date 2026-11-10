@@ -1,4 +1,4 @@
-import { generateWord } from './engine.js';
+import { generateWord, renderWritingWithSpans } from './engine.js';
 import { literal, token, join, renderNode } from './sentence-syntax.js';
 import { SCENE_VOCAB_ADDITIONS } from './vocabulary.js';
 
@@ -45,6 +45,30 @@ export function renderSceneLine(line, language) {
     return join([join([body, question]), literal(sentence.punctuation ?? (sentence.question ? '?' : '.'))], '');
   }));
   return { ...rendered, english: line.english, unknown: [...unknown] };
+}
+
+/** Apply the alphabet while keeping clickable words attached to their source entries. */
+export function renderWrittenSceneLine(line, language) {
+  const translated = renderSceneLine(line, language);
+  const { text, spans } = renderWritingWithSpans(translated.text, language);
+  const letters = [...text];
+  const tokens = [];
+  let previousOwner;
+  for (const span of spans) {
+    const owners = translated.tokens.filter(token => token.start < span.sourceEnd && token.end > span.sourceStart);
+    // A glyph may consume punctuation beside a word. A glyph shared by two
+    // words has no single inspection target, so keep that segment plain text.
+    if (owners.length !== 1 || span.end <= span.start) { previousOwner = undefined; continue; }
+    const owner = owners[0];
+    const piece = letters.slice(span.start, span.end).join('');
+    const previous = tokens.at(-1);
+    if (previousOwner === owner && previous?.end === span.start) {
+      previous.end = span.end;
+      previous.text += piece;
+    } else tokens.push({ ...owner, start: span.start, end: span.end, text: piece });
+    previousOwner = owner;
+  }
+  return { ...translated, text, tokens };
 }
 
 /**

@@ -1,6 +1,6 @@
 import { sampleCharacterIdle } from './scene-idle.js';
 import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes, resolveSceneChoice } from './scenes.js';
-import { renderSceneLine } from './scene-language.js';
+import { renderWrittenSceneLine } from './scene-language.js';
 import { getSceneLayout, getEpisodeTiming, sampleSceneLayout, shouldFlipCharacter } from './scene-layout.js';
 import { TextAudio, isAudibleCharacter } from './text-audio.js';
 import { sampleCamera, sampleAtmosphere } from './scene-direction.js';
@@ -18,7 +18,7 @@ export function buildDialogue(scene, language) {
   let start = 0;
   const minimum = scene.episodeId && scene.episodeId !== 'original' ? 5000 : 2600;
   return scene.lines.map(line => {
-    const translated = renderSceneLine(line, language);
+    const translated = renderWrittenSceneLine(line, language);
     const reactionPause = Number.isInteger(line.reactionPauseMs) ? Math.max(0, Math.min(650, line.reactionPauseMs)) : 0;
     const duration = Math.max(minimum, [...translated.text].length * 43 + 1400) + reactionPause;
     const entry = { line, english: line.english, text: translated.text, tokens: translated.tokens, unknown: translated.unknown,
@@ -461,7 +461,9 @@ export class ScenePlayer {
         const button = this.el.choiceOptions.querySelector(`[data-reply="${i}"]`);
         const text = button.querySelector('.scene-reply-text');
         const english = button.querySelector('.scene-reply-english');
-        const line = renderSceneLine(option.lines[0], this.getLanguage());
+        const language = this.getLanguage();
+        const line = renderWrittenSceneLine(option.lines[0], language);
+        text.setAttribute('dir', language.script?.direction === 'rtl' ? 'rtl' : 'ltr');
         text.textContent = line.text;
         english.textContent = line.english;
         button.addEventListener('click', () => this.chooseReply(option.id));
@@ -472,6 +474,7 @@ export class ScenePlayer {
   }
 
   buildTextParts(entry) {
+    this.el.text.setAttribute('dir', this.getLanguage().script?.direction === 'rtl' ? 'rtl' : 'ltr');
     const letters = [...entry.text];
     const parts = [{ text: '* ', start: -2, end: 0 }];
     let cursor = 0;
