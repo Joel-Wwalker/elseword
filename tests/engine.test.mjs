@@ -88,6 +88,23 @@ test('writing maps longest Unicode tokens while preserving unmapped text', () =>
   assert.notEqual(renderWriting('hello', language), 'hello');
 });
 
+test('writing provenance maps composed Unicode and punctuation to original codepoint ranges', async () => {
+  const { renderWritingWithSpans } = await import('../src/engine.js');
+  assert.equal(typeof renderWritingWithSpans, 'function');
+  const source = 'e\u0301 \u1100\u1161! 🦉';
+  const language = { script: { style: 'custom', direction: 'rtl', glyphs: { 'é': '◇', '가!': '𐀀' } } };
+  const rendered = renderWritingWithSpans(source, language);
+  assert.equal(rendered.text, '◇ 𐀀 🦉');
+  assert.equal(renderWriting(source, language), rendered.text);
+  assert.deepEqual(rendered.spans, [
+    { sourceStart: 0, sourceEnd: 2, start: 0, end: 1 },
+    { sourceStart: 2, sourceEnd: 3, start: 1, end: 2 },
+    { sourceStart: 3, sourceEnd: 6, start: 2, end: 3 },
+    { sourceStart: 6, sourceEnd: 7, start: 3, end: 4 },
+    { sourceStart: 7, sourceEnd: 8, start: 4, end: 5 },
+  ]);
+});
+
 test('sound changes are literal Unicode replacements and honor locks', () => {
   const language = fixedLanguage();
   word(language, 'eat').word = 'shésh';

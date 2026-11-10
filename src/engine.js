@@ -514,19 +514,64 @@ export function composeSentence(options = {}, language) {
   }
 }
 
-export function renderWriting(text, language) {
-  const source = String(text ?? '').normalize('NFC');
+function writingSourceRanges(original, normalized) {
+  const ranges = [];
+  let offset = 0;
+  // NFC is local to grapheme clusters. A composed cluster retains the range of
+  // all its original codepoints; unchanged clusters keep precise per-letter ranges.
+  const segments = original === normalized ? [{ segment: original }]
+    : new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(original);
+  for (const { segment } of segments) {
+    const composed = segment.normalize('NFC');
+    if (segment === composed) {
+      for (const char of segment) {
+        const range = { start: offset, end: ++offset };
+        for (let unit = 0; unit < char.length; unit++) ranges.push(range);
+      }
+    } else {
+      const range = { start: offset, end: offset + charLength(segment) };
+      for (let unit = 0; unit < composed.length; unit++) ranges.push(range);
+      offset = range.end;
+    }
+  }
+  return ranges;
+}
+
+function renderWrittenText(text, language, withSpans) {
+  const original = String(text ?? '');
+  const source = original.normalize('NFC');
   const script = language?.script ?? DEFAULT_SCRIPT;
-  if (script.style === 'latin' || !script.style) return source;
-  const map = script.style === 'runes' ? { ...RUNE_GLYPHS, ...(script.glyphs ?? {}) } : script.glyphs ?? {};
+  const latin = script.style === 'latin' || !script.style;
+  if (latin && !withSpans) return { text: source };
+  const map = latin ? {} : script.style === 'runes' ? { ...RUNE_GLYPHS, ...(script.glyphs ?? {}) } : script.glyphs ?? {};
   const keys = Object.keys(map).filter(Boolean).sort((a, b) => b.length - a.length);
+  const ranges = withSpans ? writingSourceRanges(original, source) : null;
+  const spans = [];
   let result = '';
+  let outputOffset = 0;
   for (let index = 0; index < source.length;) {
     const key = keys.find((key) => source.slice(index, index + key.length).toLocaleLowerCase('en-US') === key.toLocaleLowerCase('en-US'));
-    if (key) { result += map[key]; index += key.length; }
-    else { const char = String.fromCodePoint(source.codePointAt(index)); result += char; index += char.length; }
+    const consumed = key ?? String.fromCodePoint(source.codePointAt(index));
+    const output = key ? '' + map[key] : consumed;
+    if (withSpans) {
+      const end = outputOffset + charLength(output);
+      spans.push({ sourceStart: ranges[index].start, sourceEnd: ranges[index + consumed.length - 1].end,
+        start: outputOffset, end });
+      outputOffset = end;
+    }
+    result += output;
+    index += consumed.length;
   }
-  return result;
+  return { text: result, spans };
+}
+
+export function renderWriting(text, language) {
+  return renderWrittenText(text, language, false).text;
+}
+
+/** Rendered and original source ranges use codepoints, including NFC composition. */
+export function renderWritingWithSpans(text, language) {
+  return renderWrittenText(text, language, true);
 }
 
 export function generateNames(language, count = 6, kind = 'person') {

@@ -5,9 +5,12 @@ import { restartVocabulary, regenerateGrammarMarkers } from './engine.js';
 import { generationDiagnostics } from './generator-diagnostics.js';
 import { createLanguageGenerator } from './language-generator.js';
 import { WRITING_PRESETS, applyWritingPreset, identifyWritingPreset } from './writing-presets.js';
-import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes } from './scenes.js';
+import { SCENES, CHARACTERS, getSceneEpisode } from './scenes.js';
 import { ensureSceneVocabulary } from './scene-language.js';
 import { ScenePlayer, renderSceneRoom } from './scene-player.js';
+import { CITY_BLOCK } from './city-block.js';
+import { CityPlayer } from './city-player.js';
+import { cityBackgroundSVG } from './city-art.js';
 import { loadProject, saveProject, RECOVERY_STORAGE_KEY } from './storage.js';
 import { TextAudio } from './text-audio.js';
 import { CLOUD_CONFIG } from './cloud-config.js';
@@ -53,7 +56,7 @@ project.languages = project.languages.map(item => {
   if (updated.words.length !== item.words.length) vocabularyUpdated = true;
   return updated;
 });
-let history = [], view = 'world', sceneId = 'bakery', castOverrides = {}, episodeSelections = {}, page = 0, onlyLocked = false, namesRoll = 0, player, cloudUI, languageTools;
+let history = [], view = 'world', sceneId = 'city', castOverrides = {}, episodeSelections = {}, page = 0, onlyLocked = false, namesRoll = 0, player, cloudUI, languageTools;
 let sentenceText = '', glossText = '', toastTimer, resumeAfterDialog = false, focusDialogueAfterDialog = false;
 let sceneMaker, makerLoading, makerOpen=false, makerEpoch=0;
 let sceneCollapsed=false, resumeAfterCollapse=false;
@@ -70,8 +73,8 @@ function renderSceneVisibility(){
 }
 const playGenerated = (text,delay=0) => textAudio.playText(String(text??''),{delay});
 const language = () => project.languages.find(item => item.id === project.activeId) ?? project.languages[0];
-const currentScene = () => getSceneEpisode(sceneId, episodeSelections[sceneId] ?? 'original');
-const currentCast = () => castOverrides[sceneId] ?? currentScene().characters;
+const currentScene = () => sceneId === 'city' ? CITY_BLOCK : getSceneEpisode(sceneId, episodeSelections[sceneId] ?? 'original');
+const currentCast = () => sceneId === 'city' ? CITY_BLOCK.characters : castOverrides[sceneId] ?? currentScene().characters;
 const byEnglish = (key) => language().words.find(word => word.english.toLocaleLowerCase() === key.toLocaleLowerCase());
 
 function notify(message) { $('toast').textContent=message; $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{$('toast').hidden=true;},4200); }
@@ -113,10 +116,12 @@ function renderSummary() {
   cloudUI?.refresh();
 }
 function renderScenePicker() {
-  $('scene-grid').innerHTML=SCENES.map((scene,index)=>`<button class="scene-card ${scene.id===sceneId?'selected':''}" data-scene="${scene.id}" aria-pressed="${scene.id===sceneId}" aria-label="Visit ${escapeHTML(scene.name)}"><span class="scene-thumb" aria-hidden="true">${renderSceneRoom(scene.id)}</span><span class="scene-card-name">${escapeHTML(scene.name)}</span><span class="scene-card-tag">${String(index+1).padStart(2,'0')} / ${escapeHTML(scene.id==='busstop'?'Weather':scene.id==='bakery'?'Food':scene.id==='market'?'Shopping':scene.id==='library'?'Books':scene.id==='cafe'?'Small talk':scene.id==='tickets'?'Travel':scene.id==='rooftop'?'Night sky':'Remedies')}</span></button>`).join('');
+  $('scene-grid').innerHTML=[CITY_BLOCK,...SCENES].map((scene,index)=>`<button class="scene-card ${scene.id===sceneId?'selected':''}" data-scene="${scene.id}" aria-pressed="${scene.id===sceneId}" aria-label="Visit ${escapeHTML(scene.name)}"><span class="scene-thumb" aria-hidden="true">${scene.id==='city'?cityBackgroundSVG():renderSceneRoom(scene.id)}</span><span class="scene-card-name">${escapeHTML(scene.name)}</span><span class="scene-card-tag">${scene.id==='city'?'CITY':String(index).padStart(2,'0')} / ${escapeHTML(scene.id==='city'?'Daily life':scene.id==='busstop'?'Weather':scene.id==='bakery'?'Food':scene.id==='market'?'Shopping':scene.id==='library'?'Books':scene.id==='cafe'?'Small talk':scene.id==='tickets'?'Travel':scene.id==='rooftop'?'Night sky':'Remedies')}</span></button>`).join('');
   $('scene-description').textContent=currentScene().tag;
   $('scene-count').textContent=`${currentScene().lines.length} lines · ${currentScene().words.length} words`;
-  $('conversation-count').textContent=`${SCENES.length} rooms · ${SCENES.reduce((total, scene) => total + getSceneEpisodes(scene.id).length, 0)} conversations`;
+  $('conversation-count').textContent=`1 city · ${SCENES.length} rooms`;
+  $('change-cast').hidden=sceneId==='city';
+  $('remix-scene').hidden=sceneId==='city';
 }
 function contextWords() {
   const stop=new Set(['a','the','is','are','i','you','it','this','that','has','will','do','of','on','in','to','and','all','an','my','your','we','how','yes','no']);
@@ -130,7 +135,30 @@ function renderContextWords() {
   if(!contextWords().length)$('context-words').innerHTML='<p class="small-note">Add scene vocabulary in Words to give these lines a voice.</p>';
 }
 function renderCast() { $('cast-preview').innerHTML=currentCast().map(id=>{const c=CHARACTERS.find(c=>c.id===id);return `<div class="cast-mini">${sprite(c)}<div><strong>${c.name}</strong><small>${escapeHTML(c.title)}</small></div></div>`;}).join(''); }
-function selectScene(id) {sceneId=id;renderScenePicker();renderContextWords();renderCast();player.setScene(id,currentCast(),episodeSelections[id]??'original');}
+function mountWorldPlayer() {
+  const paused=player?.paused??matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const english=player?.english??true;
+  player?.destroy();
+  const options={getLanguage:language,onWordSelect:sceneWordDialog,textAudio};
+  player=sceneId==='city'?new CityPlayer($('player-host'),options):new ScenePlayer($('player-host'),{...options,onEpisodeChange:episodeChanged});
+  if(sceneId!=='city')player.setScene(sceneId,currentCast(),episodeSelections[sceneId]??'original');
+  player.setEnglish(english);
+  // Keep one toolbar and its persistent hide/show control when players change.
+  const toolbar=$('player-host').querySelector('.scene-toolbar');
+  $('world-scene-toolbar').replaceChildren(...toolbar.childNodes,$('toggle-scene-window'));
+  toolbar.remove();
+  if(paused||!worldPreviewAvailable())player.pause();
+  else player.play();
+}
+function selectScene(id) {
+  if(id!=='city'&&!SCENES.some(scene=>scene.id===id))return;
+  const samePlayer=(sceneId==='city')===(id==='city');
+  sceneId=id;
+  if(!samePlayer)mountWorldPlayer();
+  else if(id==='city'){const paused=player.paused;player.replay();if(paused)player.pause();}
+  else player.setScene(id,currentCast(),episodeSelections[id]??'original');
+  renderScenePicker();renderContextWords();renderCast();
+}
 function episodeChanged({sceneId: locationId,episodeId}) {
   episodeSelections[locationId]=episodeId;
   if(locationId===sceneId){renderScenePicker();renderContextWords();}
@@ -472,13 +500,8 @@ $('studio-dialog').addEventListener('close',()=>{textAudio.stop();if(resumeAfter
 window.addEventListener('hashchange',()=>navigation.restore());
 renderSceneVisibility();
 renderAll();
-player=new ScenePlayer($('player-host'),{getLanguage:language,onLine:()=>{},onEnd:()=>{},onEpisodeChange:episodeChanged,onWordSelect:sceneWordDialog,textAudio});
-// Keep the location and playback status beside the persistent hide/show control.
-const sceneToolbar=$('player-host').querySelector('.scene-toolbar');
-$('world-scene-toolbar').prepend(...sceneToolbar.childNodes);
-sceneToolbar.remove();
-player.setScene(sceneId,currentCast());
-if(sceneCollapsed){resumeAfterCollapse=!player.paused;player.pause();}
+mountWorldPlayer();
+if(sceneCollapsed)resumeAfterCollapse=!matchMedia('(prefers-reduced-motion: reduce)').matches;
 $('toggle-scene-window').onclick=()=>{
   if(!sceneCollapsed){resumeAfterCollapse=!player.paused;player.pause();}
   sceneCollapsed=!sceneCollapsed;
@@ -500,9 +523,10 @@ function closeMakerView(navigate=true){
   }
 }
 async function openMaker(remix=false){
+  if(sceneId==='city')remix=false;
   if(remix&&currentScene().choice&&!player.choiceId){notify('Choose a reply before editing this conversation.');showView('world',{replace:true});return;}
   const epoch=++makerEpoch, languageId=language().id;
-  const options=remix?{room:sceneId,episodeId:episodeSelections[sceneId]??'original',choiceId:player.choiceId}:{room:sceneId};
+  const options=remix?{room:sceneId,episodeId:episodeSelections[sceneId]??'original',choiceId:player.choiceId}:{room:sceneId==='city'?'bakery':sceneId};
   $('remix-scene').disabled=true;$('scene-editor-tab').disabled=true;$('scene-editor-tab').textContent='Opening editor…';
   try {
     if(!makerLoading)makerLoading=Promise.all([import('./scene-maker.js'),import('./scene-project.js')]).then(async ([{mountSceneMaker},{validateSceneProject}])=>{
