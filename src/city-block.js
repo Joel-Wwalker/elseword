@@ -1,5 +1,5 @@
-import { renderWritingWithSpans } from './engine.js';
-import { getSceneLineWords, renderSceneLine } from './scene-language.js';
+import { getSceneLineWords } from './scene-language.js';
+import { compilePresetDialogue } from './world-dialogue.js';
 
 const noun = (head, determiner) => ({ type: 'noun', head, determiner });
 const clause = (subject, verb, object, options = {}) => ({ type: 'clause', subject, verb, object, ...options });
@@ -40,31 +40,8 @@ export const CITY_BLOCK = {
   lines, words: [...new Set(lines.flatMap(getSceneLineWords))],
 };
 
-/** Keep lexical provenance through custom alphabets, which can expand or join sounds. */
 export function compileCityDialogue(language) {
-  return CITY_BLOCK.lines.map(line => {
-    const translated = renderSceneLine(line, language);
-    const { text, spans } = renderWritingWithSpans(translated.text, language);
-    const letters = [...text];
-    const tokens = [];
-    let previousOwner;
-    for (const span of spans) {
-      const owners = translated.tokens.filter(token => token.start < span.sourceEnd && token.end > span.sourceStart);
-      // A glyph may consume punctuation beside a word. A glyph shared by two
-      // words has no single inspection target, so keep that segment plain text.
-      if (owners.length !== 1 || span.end <= span.start) { previousOwner = undefined; continue; }
-      const owner = owners[0];
-      const piece = letters.slice(span.start, span.end).join('');
-      const previous = tokens.at(-1);
-      if (previousOwner === owner && previous?.end === span.start) {
-        previous.end = span.end;
-        previous.text += piece;
-      } else tokens.push({ ...owner, start: span.start, end: span.end, text: piece });
-      previousOwner = owner;
-    }
-    return { id: line.id, speaker: line.speaker, incident: line.incident, text, english: line.english,
-      tokens, unknown: translated.unknown, duration: letters.length * 43 + 2400 };
-  });
+  return compilePresetDialogue(CITY_BLOCK, language);
 }
 
 const ANCHORS = [

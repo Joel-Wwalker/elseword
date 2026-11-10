@@ -8,9 +8,8 @@ import { WRITING_PRESETS, applyWritingPreset, identifyWritingPreset } from './wr
 import { SCENES, CHARACTERS, getSceneEpisode } from './scenes.js';
 import { ensureSceneVocabulary } from './scene-language.js';
 import { ScenePlayer, renderSceneRoom } from './scene-player.js';
-import { CITY_BLOCK } from './city-block.js';
-import { CityPlayer } from './city-player.js';
-import { cityBackgroundSVG } from './city-art.js';
+import { WORLD_PRESETS, getWorldPreset } from './world-presets.js';
+import { WorldPresetPlayer } from './world-preset-player.js';
 import { loadProject, saveProject, RECOVERY_STORAGE_KEY } from './storage.js';
 import { TextAudio } from './text-audio.js';
 import { CLOUD_CONFIG } from './cloud-config.js';
@@ -73,8 +72,8 @@ function renderSceneVisibility(){
 }
 const playGenerated = (text,delay=0) => textAudio.playText(String(text??''),{delay});
 const language = () => project.languages.find(item => item.id === project.activeId) ?? project.languages[0];
-const currentScene = () => sceneId === 'city' ? CITY_BLOCK : getSceneEpisode(sceneId, episodeSelections[sceneId] ?? 'original');
-const currentCast = () => sceneId === 'city' ? CITY_BLOCK.characters : castOverrides[sceneId] ?? currentScene().characters;
+const currentScene = () => getWorldPreset(sceneId) ?? getSceneEpisode(sceneId, episodeSelections[sceneId] ?? 'original');
+const currentCast = () => getWorldPreset(sceneId)?.characters ?? castOverrides[sceneId] ?? currentScene().characters;
 const byEnglish = (key) => language().words.find(word => word.english.toLocaleLowerCase() === key.toLocaleLowerCase());
 
 function notify(message) { $('toast').textContent=message; $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{$('toast').hidden=true;},4200); }
@@ -116,12 +115,16 @@ function renderSummary() {
   cloudUI?.refresh();
 }
 function renderScenePicker() {
-  $('scene-grid').innerHTML=[CITY_BLOCK,...SCENES].map((scene,index)=>`<button class="scene-card ${scene.id===sceneId?'selected':''}" data-scene="${scene.id}" aria-pressed="${scene.id===sceneId}" aria-label="Visit ${escapeHTML(scene.name)}"><span class="scene-thumb" aria-hidden="true">${scene.id==='city'?cityBackgroundSVG():renderSceneRoom(scene.id)}</span><span class="scene-card-name">${escapeHTML(scene.name)}</span><span class="scene-card-tag">${scene.id==='city'?'CITY':String(index).padStart(2,'0')} / ${escapeHTML(scene.id==='city'?'Daily life':scene.id==='busstop'?'Weather':scene.id==='bakery'?'Food':scene.id==='market'?'Shopping':scene.id==='library'?'Books':scene.id==='cafe'?'Small talk':scene.id==='tickets'?'Travel':scene.id==='rooftop'?'Night sky':'Remedies')}</span></button>`).join('');
+  $('scene-grid').innerHTML=[...WORLD_PRESETS,...SCENES].map((scene,index)=>{
+    const preset=getWorldPreset(scene.id);
+    const category=preset?.category??({busstop:'Weather',bakery:'Food',market:'Shopping',library:'Books',cafe:'Small talk',tickets:'Travel',rooftop:'Night sky',apothecary:'Remedies'}[scene.id]);
+    return `<button class="scene-card ${scene.id===sceneId?'selected':''}" data-scene="${scene.id}" aria-pressed="${scene.id===sceneId}" aria-label="Visit ${escapeHTML(scene.name)}"><span class="scene-thumb" aria-hidden="true">${preset?preset.renderBackground():renderSceneRoom(scene.id)}</span><span class="scene-card-name">${escapeHTML(scene.name)}</span><span class="scene-card-tag">${preset?'WORLD':String(index-WORLD_PRESETS.length+1).padStart(2,'0')} / ${escapeHTML(category)}</span></button>`;
+  }).join('');
   $('scene-description').textContent=currentScene().tag;
   $('scene-count').textContent=`${currentScene().lines.length} lines · ${currentScene().words.length} words`;
-  $('conversation-count').textContent=`1 city · ${SCENES.length} rooms`;
-  $('change-cast').hidden=sceneId==='city';
-  $('remix-scene').hidden=sceneId==='city';
+  $('conversation-count').textContent=`${WORLD_PRESETS.length} worlds · ${SCENES.length} rooms`;
+  $('change-cast').hidden=!!getWorldPreset(sceneId);
+  $('remix-scene').hidden=!!getWorldPreset(sceneId);
 }
 function contextWords() {
   const stop=new Set(['a','the','is','are','i','you','it','this','that','has','will','do','of','on','in','to','and','all','an','my','your','we','how','yes','no']);
@@ -140,8 +143,9 @@ function mountWorldPlayer() {
   const english=player?.english??true;
   player?.destroy();
   const options={getLanguage:language,onWordSelect:sceneWordDialog,textAudio};
-  player=sceneId==='city'?new CityPlayer($('player-host'),options):new ScenePlayer($('player-host'),{...options,onEpisodeChange:episodeChanged});
-  if(sceneId!=='city')player.setScene(sceneId,currentCast(),episodeSelections[sceneId]??'original');
+  const preset=getWorldPreset(sceneId);
+  player=preset?new WorldPresetPlayer($('player-host'),{...options,preset}):new ScenePlayer($('player-host'),{...options,onEpisodeChange:episodeChanged});
+  if(!preset)player.setScene(sceneId,currentCast(),episodeSelections[sceneId]??'original');
   player.setEnglish(english);
   // Keep one toolbar and its persistent hide/show control when players change.
   const toolbar=$('player-host').querySelector('.scene-toolbar');
@@ -151,11 +155,12 @@ function mountWorldPlayer() {
   else player.play();
 }
 function selectScene(id) {
-  if(id!=='city'&&!SCENES.some(scene=>scene.id===id))return;
-  const samePlayer=(sceneId==='city')===(id==='city');
+  const preset=getWorldPreset(id);
+  if(!preset&&!SCENES.some(scene=>scene.id===id))return;
+  const samePlayer=sceneId===id||(!getWorldPreset(sceneId)&&!preset);
   sceneId=id;
   if(!samePlayer)mountWorldPlayer();
-  else if(id==='city'){const paused=player.paused;player.replay();if(paused)player.pause();}
+  else if(preset){const paused=player.paused;player.replay();if(paused)player.pause();}
   else player.setScene(id,currentCast(),episodeSelections[id]??'original');
   renderScenePicker();renderContextWords();renderCast();
 }
@@ -523,10 +528,10 @@ function closeMakerView(navigate=true){
   }
 }
 async function openMaker(remix=false){
-  if(sceneId==='city')remix=false;
+  if(getWorldPreset(sceneId))remix=false;
   if(remix&&currentScene().choice&&!player.choiceId){notify('Choose a reply before editing this conversation.');showView('world',{replace:true});return;}
   const epoch=++makerEpoch, languageId=language().id;
-  const options=remix?{room:sceneId,episodeId:episodeSelections[sceneId]??'original',choiceId:player.choiceId}:{room:sceneId==='city'?'bakery':sceneId};
+  const options=remix?{room:sceneId,episodeId:episodeSelections[sceneId]??'original',choiceId:player.choiceId}:{room:getWorldPreset(sceneId)?'bakery':sceneId};
   $('remix-scene').disabled=true;$('scene-editor-tab').disabled=true;$('scene-editor-tab').textContent='Opening editor…';
   try {
     if(!makerLoading)makerLoading=Promise.all([import('./scene-maker.js'),import('./scene-project.js')]).then(async ([{mountSceneMaker},{validateSceneProject}])=>{

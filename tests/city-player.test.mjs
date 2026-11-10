@@ -4,19 +4,65 @@ import { createLanguage } from '../src/engine.js';
 import { TextAudio } from '../src/text-audio.js';
 import { browserBoundary, audioBoundary, BrowserElement } from './city-player-dom.mjs';
 
-const api = await import('../src/city-player.js').catch(error => ({ loadError: error.message }));
+const api = await import('../src/world-preset-player.js').catch(error => ({ loadError: error.message }));
+const presets = await import('../src/world-presets.js').catch(error => ({ loadError: error.message }));
 function fixture(t, options = {}) {
-  assert.equal(typeof api.CityPlayer, 'function', api.loadError || 'CityPlayer must implement the World lifecycle');
+  assert.equal(typeof api.WorldPresetPlayer, 'function', api.loadError || 'WorldPresetPlayer must implement the World lifecycle');
   let player;
   t.after(() => player?.destroy());
   const browser = browserBoundary(t, options), audio = options.audio || audioBoundary();
   let language = createLanguage({ name: 'City test', seed: 'city-player', preset: 'soft' });
   const selected = [];
-  player = new api.CityPlayer(browser.host, { getLanguage: () => language, textAudio: audio,
+  player = new api.WorldPresetPlayer(browser.host, { preset: options.preset || presets.getWorldPreset('city'), getLanguage: () => language, textAudio: audio,
     onWordSelect: token => selected.push(token) });
   player.intersection.callback([{ isIntersecting: true }]); browser.frame(0);
   return { ...browser, player, audio, language, selected, changeLanguage(value) { language = value; player.refresh(); } };
 }
+
+test('all four presets render their own cast and translated dialogue through one player', t => {
+  assert.equal(typeof presets.getWorldPreset, 'function', presets.loadError);
+  assert.deepEqual(presets.WORLD_PRESETS.map(preset => preset.id), ['city', 'apartments', 'nightmarket', 'train']);
+  let active;
+  t.after(() => active?.destroy());
+  const { host, player, audio, language } = fixture(t);
+  player.pause(); player.setEnglish(false);
+  active = player;
+  for (const preset of presets.WORLD_PRESETS.slice(1)) {
+    const oldPause = active.el.pause, oldClock = active.backgroundTime;
+    const paused = active.paused, english = active.english;
+    active.destroy();
+    active = new api.WorldPresetPlayer(host, { preset, getLanguage: () => language, textAudio: audio });
+    active.setEnglish(english); if (paused) active.pause();
+    assert.equal(host.querySelectorAll('.world-player').length, 1);
+    assert.deepEqual([...active.actorNodes.keys()], preset.characters);
+    assert.equal(active.el.stage.getAttribute('aria-label'), preset.description);
+    assert.equal(active.el.location.textContent, preset.location.toUpperCase());
+    active.next();
+    assert.equal(active.el.translation.textContent, preset.lines[0].english);
+    assert.equal(active.el.translation.hidden, true);
+    assert.ok(active.el.text.querySelectorAll('button').length > 0);
+    const stops = audio.stops;
+    oldPause.dispatchEvent(new Event('click'));
+    assert.equal(audio.stops, stops, 'Destroyed controls cannot change the shared audio');
+    assert.equal(active.paused, true);
+    assert.ok(Number.isFinite(oldClock));
+  }
+});
+
+test('a sliding train bag keeps its SVG node while its position changes', t => {
+  assert.equal(typeof presets.getWorldPreset, 'function', presets.loadError);
+  const { player, advance } = fixture(t, { preset: presets.getWorldPreset('train') });
+  for (let line = 0; line < 3; line++) { player.next(); player.next(); }
+  const bag = player.el.props.children.find(element => element.dataset.prop === 'rolling-bag');
+  assert.ok(bag, 'The carriage has luggage in its aisle');
+  const left = bag.style.left, writes = bag.htmlWrites;
+  advance(100);
+  assert.equal(player.el.props.children.find(element => element.dataset.prop === 'rolling-bag'), bag);
+  assert.notEqual(bag.style.left, left);
+  assert.equal(bag.htmlWrites, writes, 'Movement alone cannot rebuild the SVG');
+  player.pause(); const pausedLeft = bag.style.left; advance(100);
+  assert.equal(bag.style.left, pausedLeft);
+});
 
 test('World controls retain references when the app moves toolbar labels outside the host', t => {
   const { player, host, advance } = fixture(t);
@@ -287,7 +333,7 @@ test('real reduced-motion speech survives redraws and cancels on focus, hiding a
   count = outputs.length; advance(200); assert.equal(outputs.length, count);
   document.hidden = false; document.dispatchEvent(new Event('visibilitychange'));
   player.play(); advance(100); player.destroy(); count = outputs.length;
-  const next = new api.CityPlayer(host, { getLanguage: () => language, textAudio: audio });
+  const next = new api.WorldPresetPlayer(host, { preset: presets.getWorldPreset('city'), getLanguage: () => language, textAudio: audio });
   try { advance(300); assert.equal(outputs.length, count, 'A new paused player cannot inherit pending speech'); }
   finally { next.destroy(); }
   assert.equal(audio._destroyed, false, 'Shared audio remains usable by subsequent players');

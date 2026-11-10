@@ -223,7 +223,8 @@ function residentHead(id, palette, direction, expression) {
   }
   if (back) return out + rect(6, 9, 8, 4, palette.shadow) + rect(8, 7, 5, 4, palette.skin);
   const eyes = id === 'rook' ? '#242e35' : '#343338';
-  if (side) out += rect(12, 9, 3, 2, eyes) + rect(15, 11, 2, 2, palette.skin);
+  if (expression === 'asleep') out += side ? rect(12, 10, 3, 1, eyes) : rect(6, 10, 3, 1, eyes) + rect(11, 10, 3, 1, eyes);
+  else if (side) out += rect(12, 9, 3, 2, eyes) + rect(15, 11, 2, 2, palette.skin);
   else out += rect(6, 9, 3, 2, eyes) + rect(11, 9, 3, 2, eyes);
   if (expression === 'surprised') out += rect(side ? 13 : 9, 12, 2, 2, '#514747');
   else if (id !== 'rook' && id !== 'hush') out += rect(side ? 12 : 8, 13, side ? 2 : 4, 1, palette.shadow);
@@ -235,14 +236,16 @@ export function cityActorSVG(actor = {}) {
   const palette = RESIDENTS[id];
   const facing = ['left', 'right', 'up', 'down'].includes(actor.direction) ? actor.direction : 'down';
   const direction = facing === 'left' ? 'right' : facing;
-  const activity = ['walk', 'hammer', 'carry', 'pockets'].includes(actor.activity) ? actor.activity : 'idle';
+  const activity = ['walk', 'hammer', 'carry', 'pockets', 'cook', 'sleep'].includes(actor.activity) ? actor.activity : 'idle';
   const step = actor.step === 1 ? 1 : 0;
-  const expression = actor.expression === 'surprised' ? 'surprised' : 'neutral';
+  const expression = activity === 'sleep' ? 'asleep' : actor.expression === 'surprised' ? 'surprised' : 'neutral';
   let body = rect(4, 26, 13, 2, '#5d635a', ' opacity=".4"');
   const walking = activity === 'walk';
-  body += rect(6, 21, 4, 5, INK) + rect(11, 21, 4, 5, INK) +
-    rect(walking && step ? 5 : 6, walking && !step ? 24 : 25, 5, 2, '#34343b') +
-    rect(walking && step ? 12 : 11, walking && step ? 24 : 25, 5, 2, '#34343b');
+  body += activity === 'sleep'
+    ? rect(5, 21, 5, 4, INK) + rect(11, 21, 5, 4, INK) + rect(4, 24, 6, 2, '#34343b') + rect(11, 24, 6, 2, '#34343b')
+    : rect(6, 21, 4, 5, INK) + rect(11, 21, 4, 5, INK) +
+      rect(walking && step ? 5 : 6, walking && !step ? 24 : 25, 5, 2, '#34343b') +
+      rect(walking && step ? 12 : 11, walking && step ? 24 : 25, 5, 2, '#34343b');
   if (id === 'vesper') {
     body += path('M6 13h8v3h2v4h2v4h-5v-2h-2v2H8v-2H6v2H2v-4h2v-4h2z', INK) +
       path('M7 14h6v3h2v4h1v2h-3v-2H7v2H4v-3h2v-4h1z', palette.coat) +
@@ -259,7 +262,15 @@ export function cityActorSVG(actor = {}) {
   if (id === 'slate') body += rect(10, 15, 2, 8, '#564e48') + rect(11, 19, 5, 5, '#6c6255') + rect(12, 19, 3, 1, '#c2ae85');
   if (id === 'shard') body += rect(6, 16, 9, 2, '#b1b8a0') + rect(9, 18, 2, 4, '#819488');
   // Arms follow the work, while feet remain on the model's fixed anchors.
-  if (activity === 'pockets') {
+  if (activity === 'sleep') {
+    body += rect(3, 16, 3, 5, palette.coat) + rect(14, 16, 3, 5, palette.coat) +
+      rect(5, 19, 4, 2, palette.skin) + rect(11, 19, 4, 2, palette.skin) + rect(9, 20, 2, 1, palette.light);
+  } else if (activity === 'cook') {
+    body += rect(3, 16, 3, 6, palette.coat) + rect(3, 21, 3, 2, palette.skin) +
+      rect(14, 16, 3, 4, palette.coat) + rect(15, step ? 17 : 19, 4, 2, palette.skin) +
+      rect(step ? 17 : 18, step ? 12 : 14, 1, 7, '#b99b70') +
+      rect(step ? 16 : 17, step ? 11 : 13, 3, 3, '#dbbd8a');
+  } else if (activity === 'pockets') {
     body += rect(3, 16, 3, 4, INK) + rect(14, 16, 3, 4, INK) +
       rect(4, 17, 3, 3, palette.coat) + rect(13, 17, 3, 3, palette.coat) +
       rect(6, 19, 3, 2, palette.skin) + rect(11, 19, 3, 2, palette.skin);

@@ -1,5 +1,5 @@
-import { CITY_BLOCK, compileCityDialogue, sampleCity } from './city-block.js';
-import { cityBackgroundSVG, cityActorSVG, cityPropSVG } from './city-art.js';
+import { compilePresetDialogue } from './world-dialogue.js';
+import { cityActorSVG } from './city-art.js';
 import { CHARACTERS } from './scenes.js';
 import { TextAudio, isAudibleCharacter } from './text-audio.js';
 
@@ -17,11 +17,12 @@ const button = (className, text) => {
   return element;
 };
 
-/** One fixed city, with an independent clock for residents and translated speech. */
-export class CityPlayer {
-  constructor(container, { getLanguage, onWordSelect = () => {}, textAudio } = {}) {
-    if (!container || typeof getLanguage !== 'function') throw new TypeError('CityPlayer needs a container and getLanguage callback.');
+/** Fixed places share independent clocks for activity and translated speech. */
+export class WorldPresetPlayer {
+  constructor(container, { preset, getLanguage, onWordSelect = () => {}, textAudio } = {}) {
+    if (!container || typeof getLanguage !== 'function' || !preset) throw new TypeError('WorldPresetPlayer needs a container, preset and getLanguage callback.');
     this.container = container;
+    this.preset = preset;
     this.getLanguage = getLanguage;
     this.onWordSelect = onWordSelect;
     this.motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -105,18 +106,18 @@ export class CityPlayer {
   build() {
     this.root = node('div', 'world-player city-player');
     const toolbar = node('div', 'scene-toolbar');
-    const location = node('span', 'scene-location', CITY_BLOCK.location.toUpperCase());
+    const location = node('span', 'scene-location', this.preset.location.toUpperCase());
     const status = node('span', 'scene-status');
     toolbar.append(location, status);
     const stage = node('div', 'city-stage');
-    stage.setAttribute('role', 'group'); stage.setAttribute('aria-label', CITY_BLOCK.description);
+    stage.setAttribute('role', 'group'); stage.setAttribute('aria-label', this.preset.description);
     const background = node('div', 'city-background'); background.setAttribute('aria-hidden', 'true');
-    background.innerHTML = cityBackgroundSVG();
+    background.innerHTML = this.preset.renderBackground();
     const props = node('div', 'city-props'); props.setAttribute('aria-hidden', 'true');
     Object.assign(props.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
     stage.append(background, props);
     this.actorMarkup = new Map();
-    this.actorNodes = new Map(CITY_BLOCK.characters.map(id => {
+    this.actorNodes = new Map(this.preset.characters.map(id => {
       const actor = node('div', 'city-resident');
       actor.dataset.character = id; actor.setAttribute('aria-hidden', 'true'); stage.append(actor);
       return [id, actor];
@@ -154,7 +155,7 @@ export class CityPlayer {
     if (this.destroyed) return;
     this.hold();
     const fraction = this.current ? clamp(this.elapsed / this.current.duration, 0, 1) : 0;
-    this.dialogue = compileCityDialogue(this.getLanguage());
+    this.dialogue = compilePresetDialogue(this.preset, this.getLanguage());
     this.index = Math.min(this.index, this.dialogue.length - 1);
     this.elapsed = fraction * this.dialogue[this.index].duration;
     this.current = null;
@@ -331,7 +332,7 @@ export class CityPlayer {
     this.visibleChars = chars; this.renderTextParts(chars); this.updateHint();
     this.el.next.setAttribute('aria-label', chars < this.letters.length ? 'Reveal complete dialogue' : 'Next dialogue line');
     this.el.next.textContent = chars < this.letters.length ? 'Reveal line' : 'Next line';
-    const sample = sampleCity(this.backgroundTime, { incident: current.incident, reduced: this.motion.matches });
+    const sample = this.preset.sample(this.backgroundTime, { incident: current.incident, reduced: this.motion.matches });
     for (const actor of sample.actors) {
       const element = this.actorNodes.get(actor.id);
       element.style.left = `${actor.x / 512 * 100}%`; element.style.top = `${(actor.y - 28) / 320 * 100}%`;
@@ -342,17 +343,37 @@ export class CityPlayer {
         element.innerHTML = markup; this.actorMarkup.set(actor.id, markup);
       }
     }
-    const propKey = JSON.stringify(sample.props);
-    if (this.propKey !== propKey) {
-      this.propKey = propKey;
-      this.el.props.replaceChildren(...sample.props.map(prop => {
-        const element = node('div', 'city-prop'); element.innerHTML = cityPropSVG(prop.type);
-        element.style.left = `${prop.x / 512 * 100}%`; element.style.top = `${(prop.y - 20) / 320 * 100}%`;
-        element.style.transform = 'translateX(-50%)'; return element;
-      }));
-    }
+    this.renderProps(sample.props);
     this.speakerActor = sample.actors.find(actor => actor.id === current.speaker);
     this.positionBubble();
+  }
+
+  renderProps(props) {
+    this.propNodes ??= new Map();
+    const ids = new Set(props.map(prop => prop.id));
+    for (const id of this.propNodes.keys()) if (!ids.has(id)) this.propNodes.delete(id);
+    for (const prop of props) {
+      const width = prop.width ?? 20, height = prop.height ?? 20;
+      let entry = this.propNodes.get(prop.id);
+      if (!entry) {
+        const element = node('div', 'city-prop'); element.dataset.prop = prop.id;
+        entry = { element }; this.propNodes.set(prop.id, entry);
+      }
+      const appearance = JSON.stringify([prop.type, prop.frame ?? 0, width, height]);
+      if (entry.appearance !== appearance) {
+        entry.element.innerHTML = this.preset.renderProp(prop); entry.appearance = appearance;
+      }
+      Object.assign(entry.element.style, {
+        left: `${prop.x / 512 * 100}%`, top: `${(prop.y - height) / 320 * 100}%`,
+        width: `${width / 512 * 100}%`, height: `${height / 320 * 100}%`,
+        opacity: String(prop.opacity ?? 1), zIndex: prop.layer === 'front' ? '3' : '1',
+      });
+    }
+    const order = props.map(prop => prop.id).join('|');
+    if (this.propOrder !== order) {
+      this.el.props.replaceChildren(...props.map(prop => this.propNodes.get(prop.id).element));
+      this.propOrder = order;
+    }
   }
 
   destroy() {
