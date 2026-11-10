@@ -49,12 +49,12 @@ test('city clauses reorder as authored while preserving tense, possessives and q
   const { compileCityDialogue } = api();
   const language = literalLanguage();
   const orders = [
-    ['SVO', 'damn, i PAST forget my wallet!', 'you PAST eat the bread.', 'this be your package Q?'],
-    ['SOV', 'damn, i my wallet PAST forget!', 'you the bread PAST eat.', 'this your package be Q?'],
-    ['VSO', 'damn, PAST forget i my wallet!', 'PAST eat you the bread.', 'be this your package Q?'],
-    ['VOS', 'damn, PAST forget my wallet i!', 'PAST eat the bread you.', 'be your package this Q?'],
-    ['OSV', 'damn, my wallet i PAST forget!', 'the bread you PAST eat.', 'your package this be Q?'],
-    ['OVS', 'damn, my wallet PAST forget i!', 'the bread PAST eat you.', 'your package be this Q?'],
+    ['SVO', 'damn, i PAST forget my wallet!', 'you PAST eat the bread. that bread NEG PAST be free.', 'this be your package Q? please say yes.'],
+    ['SOV', 'damn, i my wallet PAST forget!', 'you the bread PAST eat. that bread free NEG PAST be.', 'this your package be Q? please yes say.'],
+    ['VSO', 'damn, PAST forget i my wallet!', 'PAST eat you the bread. NEG PAST be that bread free.', 'be this your package Q? please say yes.'],
+    ['VOS', 'damn, PAST forget my wallet i!', 'PAST eat the bread you. NEG PAST be free that bread.', 'be your package this Q? please say yes.'],
+    ['OSV', 'damn, my wallet i PAST forget!', 'the bread you PAST eat. free that bread NEG PAST be.', 'your package this be Q? please yes say.'],
+    ['OVS', 'damn, my wallet PAST forget i!', 'the bread PAST eat you. free NEG PAST be that bread.', 'your package be this Q? please yes say.'],
   ];
   for (const [order, wallet, bread, packageQuestion] of orders) {
     language.grammar.order = order;
@@ -65,13 +65,13 @@ test('city clauses reorder as authored while preserving tense, possessives and q
   }
   language.grammar.order = 'SVO';
   assert.deepEqual(compileCityDialogue(language).slice(2).map(line => line.text), [
-    'i FUT come back.', 'this be your package Q?', 'i PAST order one book.',
-    'this be a chair.', 'the wall be ready.', 'where the door be Q?', 'shit.',
+    'sorry. i FUT come back. please forget my face.', 'this be your package Q? please say yes.', 'i PAST order one book. one.',
+    'this be a chair. you can read on it.', 'the wall be ready. i can sleep now.', 'good. where the door be Q?', 'shit. i PAST forget the door.',
   ]);
   language.grammar.past = '';
   language.grammar.question = '';
-  assert.equal(compileCityDialogue(language)[3].text, 'this be your package?');
-  assert.equal(compileCityDialogue(language)[4].text, 'i order one book.');
+  assert.equal(compileCityDialogue(language)[3].text, 'this be your package? please say yes.');
+  assert.equal(compileCityDialogue(language)[4].text, 'i order one book. one.');
 });
 
 test('custom symbols and RTL keep codepoint spans attached to their original dictionary entries', () => {
@@ -147,6 +147,20 @@ test('NFC composition keeps source token ownership after combining sequences shr
   assert.deepEqual(line.tokens.slice(0, 2).map(({ key, text, start, end }) => ({ key, text, start, end })), [
     { key: 'damn', text: '𐀀', start: 0, end: 1 },
     { key: 'i', text: 'XX', start: 2, end: 4 },
+  ]);
+});
+
+test('repeated words in one delivery line retain separate Unicode inspection targets', () => {
+  const { compileCityDialogue } = api();
+  const language = literalLanguage();
+  const one = language.words.find(word => word.english === 'one');
+  one.word = 'e\u0301';
+  language.script = { style: 'custom', direction: 'rtl', glyphs: { 'é': '𐀀' } };
+  const line = compileCityDialogue(language).find(line => line.id === 'delivery-2');
+  assert.equal(line.text, 'i PAST order 𐀀 book. 𐀀.');
+  assert.deepEqual(line.tokens.filter(token => token.key === 'one').map(({ wordId, start, end, text }) => ({ wordId, start, end, text })), [
+    { wordId: one.id, start: 13, end: 14, text: '𐀀' },
+    { wordId: one.id, start: 21, end: 22, text: '𐀀' },
   ]);
 });
 

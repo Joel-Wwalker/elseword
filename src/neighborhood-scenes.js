@@ -2,7 +2,8 @@ import { getSceneLineWords } from './scene-language.js';
 
 const noun = (head, determiner) => ({ type: 'noun', head, determiner });
 const clause = (subject, verb, object, options = {}) => ({ type: 'clause', subject, verb, object, ...options });
-const fragment = word => ({ type: 'fragment', items: [word] });
+const sequence = (...items) => ({ type: 'sequence', items });
+const fragment = (word, options = {}) => ({ type: 'fragment', items: [word], ...options });
 
 function scene(metadata, lines) {
   return { ...metadata, lines, words: [...new Set(lines.flatMap(getSceneLineWords))] };
@@ -13,12 +14,25 @@ export const APARTMENTS = scene({
   description: 'Soup on the stove, a dropped pan, and a pipe that needs attention.',
   characters: ['kiln', 'brine', 'hush', 'moss'],
 }, [
-  { id: 'pan-1', speaker: 'kiln', incident: 'pan', english: 'The soup is ready.', syntax: [clause(noun('soup', 'the'), 'be', 'ready')] },
-  { id: 'pan-2', speaker: 'hush', incident: 'pan', english: 'What was that?', syntax: [clause('what', 'be', 'that', { tense: 'past', question: true })] },
-  { id: 'pan-3', speaker: 'kiln', incident: 'pan', english: 'I dropped the pan.', syntax: [clause('i', 'drop', noun('pan', 'the'), { tense: 'past' })] },
-  { id: 'pipe-1', speaker: 'brine', incident: 'pipe', english: 'The water is cold.', syntax: [clause(noun('water', 'the'), 'be', 'cold')] },
-  { id: 'pipe-2', speaker: 'moss', incident: 'pipe', english: 'The pipe is broken.', syntax: [clause(noun('pipe', 'the'), 'be', 'broken')] },
-  { id: 'pipe-3', speaker: 'brine', incident: 'pipe', english: 'I will fix it.', syntax: [clause('i', 'fix', 'it', { tense: 'future' })] },
+  { id: 'pan-1', speaker: 'kiln', incident: 'pan', english: 'The soup is ready. I can eat now.', syntax: [
+    clause(noun('soup', 'the'), 'be', 'ready'), clause('i', 'eat', undefined, { modal: 'can', tail: 'now' }),
+  ] },
+  { id: 'pan-2', speaker: 'hush', incident: 'pan', english: 'What was that? Are you alive?', syntax: [
+    clause('what', 'be', 'that', { tense: 'past', question: true }), clause('you', 'be', 'alive', { question: true }),
+  ] },
+  { id: 'pan-3', speaker: 'kiln', incident: 'pan', english: 'Yes. I dropped the pan. Go back to sleep.', syntax: [
+    fragment('yes'), clause('i', 'drop', noun('pan', 'the'), { tense: 'past' }),
+    clause(undefined, 'go', undefined, { tail: sequence('back', 'to', 'sleep') }),
+  ] },
+  { id: 'pipe-1', speaker: 'brine', incident: 'pipe', english: 'The water is cold!', syntax: [
+    clause(noun('water', 'the'), 'be', 'cold', { punctuation: '!' }),
+  ] },
+  { id: 'pipe-2', speaker: 'moss', incident: 'pipe', english: 'The pipe is broken. Again.', syntax: [
+    clause(noun('pipe', 'the'), 'be', 'broken'), fragment('again'),
+  ] },
+  { id: 'pipe-3', speaker: 'brine', incident: 'pipe', english: 'Again? I fixed it yesterday.', syntax: [
+    fragment('again', { question: true }), clause('i', 'fix', 'it', { tense: 'past', tail: 'yesterday' }),
+  ] },
 ]);
 
 export const NIGHT_MARKET = scene({
@@ -26,12 +40,22 @@ export const NIGHT_MARKET = scene({
   description: 'Hot soup, patient customers, and a cat with dinner plans.',
   characters: ['kiln', 'shard', 'moss', 'vesper', 'brine', 'slate'],
 }, [
-  { id: 'snack-1', speaker: 'moss', incident: 'snack', english: 'I want the soup.', syntax: [clause('i', 'want', noun('soup', 'the'))] },
-  { id: 'snack-2', speaker: 'kiln', incident: 'snack', english: 'The bowl is hot.', syntax: [clause(noun('bowl', 'the'), 'be', 'hot')] },
-  { id: 'snack-3', speaker: 'moss', incident: 'snack', english: 'I will wait.', syntax: [clause('i', 'wait', undefined, { tense: 'future' })] },
-  { id: 'theft-1', speaker: 'vesper', incident: 'theft', english: 'That was my food.', syntax: [clause('that', 'be', noun('food', 'my'), { tense: 'past' })] },
+  { id: 'snack-1', speaker: 'moss', incident: 'snack', english: 'I need the soup. I\'m hungry.', syntax: [
+    clause('i', 'need', noun('soup', 'the')), clause('i', 'be', 'hungry'),
+  ] },
+  { id: 'snack-2', speaker: 'kiln', incident: 'snack', english: 'Wait. The bowl is hot.', syntax: [
+    clause(undefined, 'wait'), clause(noun('bowl', 'the'), 'be', 'hot'),
+  ] },
+  { id: 'snack-3', speaker: 'moss', incident: 'snack', english: 'Damn. I\'ll wait.', syntax: [
+    fragment('damn'), clause('i', 'wait', undefined, { tense: 'future' }),
+  ] },
+  { id: 'theft-1', speaker: 'vesper', incident: 'theft', english: 'No! That was my food!', syntax: [
+    fragment('no', { punctuation: '!' }), clause('that', 'be', noun('food', 'my'), { tense: 'past', punctuation: '!' }),
+  ] },
   { id: 'theft-2', speaker: 'shard', incident: 'theft', english: 'The cat ate it.', syntax: [clause(noun('cat', 'the'), 'eat', 'it', { tense: 'past' })] },
-  { id: 'theft-3', speaker: 'vesper', incident: 'theft', english: 'Damn.', syntax: [fragment('damn')] },
+  { id: 'theft-3', speaker: 'vesper', incident: 'theft', english: 'I hope the cat can pay.', syntax: [
+    clause('i', 'hope', clause(noun('cat', 'the'), 'pay', undefined, { modal: 'can' })),
+  ] },
 ]);
 
 export const TRAIN_CARRIAGE = scene({
@@ -39,12 +63,24 @@ export const TRAIN_CARRIAGE = scene({
   description: 'A missed station and a bag with somewhere else to be.',
   characters: ['vesper', 'rook', 'moss', 'hush', 'brine', 'slate'],
 }, [
-  { id: 'stop-1', speaker: 'vesper', incident: 'stop', english: 'This is my stop!', syntax: [clause('this', 'be', noun('stop', 'my'), { punctuation: '!' })] },
-  { id: 'stop-2', speaker: 'rook', incident: 'stop', english: 'The train passed the station.', syntax: [clause(noun('train', 'the'), 'pass', noun('station', 'the'), { tense: 'past' })] },
-  { id: 'stop-3', speaker: 'vesper', incident: 'stop', english: 'Shit.', syntax: [fragment('shit')] },
-  { id: 'luggage-1', speaker: 'brine', incident: 'luggage', english: 'My bag is moving.', syntax: [clause(noun('bag', 'my'), 'move')] },
-  { id: 'luggage-2', speaker: 'slate', incident: 'luggage', english: 'I will catch it.', syntax: [clause('i', 'catch', 'it', { tense: 'future' })] },
-  { id: 'luggage-3', speaker: 'brine', incident: 'luggage', english: 'You missed the bag.', syntax: [clause('you', 'miss', noun('bag', 'the'), { tense: 'past' })] },
+  { id: 'stop-1', speaker: 'vesper', incident: 'stop', english: 'Wait! This is my stop!', syntax: [
+    clause(undefined, 'wait', undefined, { punctuation: '!' }), clause('this', 'be', noun('stop', 'my'), { punctuation: '!' }),
+  ] },
+  { id: 'stop-2', speaker: 'rook', incident: 'stop', english: 'That was your stop.', syntax: [
+    clause('that', 'be', noun('stop', 'your'), { tense: 'past' }),
+  ] },
+  { id: 'stop-3', speaker: 'vesper', incident: 'stop', english: 'Shit. I waved at it.', syntax: [
+    fragment('shit'), clause('i', 'wave', undefined, { tense: 'past', tail: sequence('at', 'it') }),
+  ] },
+  { id: 'luggage-1', speaker: 'brine', incident: 'luggage', english: 'My bag is moving. My wallet is inside!', syntax: [
+    clause(noun('bag', 'my'), 'move'), clause(noun('wallet', 'my'), 'be', 'inside', { punctuation: '!' }),
+  ] },
+  { id: 'luggage-2', speaker: 'slate', incident: 'luggage', english: 'I\'ll catch it. Don\'t panic.', syntax: [
+    clause('i', 'catch', 'it', { tense: 'future' }), clause(undefined, 'panic', undefined, { negative: true }),
+  ] },
+  { id: 'luggage-3', speaker: 'brine', incident: 'luggage', english: 'You missed the bag. Can I panic now?', syntax: [
+    clause('you', 'miss', noun('bag', 'the'), { tense: 'past' }), clause('i', 'panic', undefined, { modal: 'can', tail: 'now', question: true }),
+  ] },
 ]);
 
 export const NEIGHBORHOOD_SCENES = [APARTMENTS, NIGHT_MARKET, TRAIN_CARRIAGE];
