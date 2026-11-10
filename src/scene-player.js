@@ -3,13 +3,15 @@ import { SCENES, CHARACTERS, getSceneEpisode, getSceneEpisodes, resolveSceneChoi
 import { renderSceneLine } from './scene-language.js';
 import { getSceneLayout, getEpisodeTiming, sampleSceneLayout, shouldFlipCharacter } from './scene-layout.js';
 import { TextAudio, isAudibleCharacter } from './text-audio.js';
-import { sampleCamera } from './scene-direction.js';
+import { sampleCamera, sampleAtmosphere } from './scene-direction.js';
 import { sampleExpressions } from './scene-expressions.js';
 import { resolveCharacterFace } from './character-faces.js';
 import { faceMarkup } from './character-face-renderer.js';
 import { episodeSoundEvents, crossedSoundEvents } from './scene-sound-events.js';
 
 let facePlayerId = 0;
+
+export const RAIN_CLIP_RECTS = [[27, 23, 330, 47], [27, 70, 58, 114], [296, 70, 61, 114], [27, 169, 330, 15]];
 
 /** Authored grammar changes the speech; the exact original English remains its gloss. */
 export function buildDialogue(scene, language) {
@@ -117,7 +119,7 @@ const bakeryForeground = `<svg class="scene-front" viewBox="0 0 384 216" aria-hi
 
 /** Room markup contains only local, hand-authored geometry, never user-supplied strings. */
 export function renderRoom(id) {
-  let background = '', foreground = '', ambient = '';
+  let background = '', foreground = '', ambient = '', rainLayer = '';
   const layout = getSceneLayout(id);
   if (id === 'bakery') return { background: bakeryBackground, foreground: bakeryForeground, ambient,
     positions: layout.positions };
@@ -143,7 +145,8 @@ export function renderRoom(id) {
     background += rect(53, 175, 31, 2, '#7b8190') + rect(277, 170, 36, 2, '#7b8190');
     // The shelter blocks rain. Animate drops inside a fixed mask, not the mask itself.
     const rain = Array.from({ length: 34 }, (_, i) => rect(30 + (i * 73) % 320, 21 + (i * 37) % 160, 1, 7, '#a5b7c2')).join('');
-    ambient = `<defs><clipPath id="rain-outside-shelter">${rect(27, 23, 330, 47, '#fff')}${rect(27, 70, 58, 114, '#fff')}${rect(296, 70, 61, 114, '#fff')}${rect(27, 169, 330, 15, '#fff')}</clipPath></defs><g clip-path="url(#rain-outside-shelter)"><g class="scene-rain-drops">${rain}</g></g>`;
+    ambient = `<defs><clipPath id="rain-outside-shelter">${RAIN_CLIP_RECTS.map(bounds => rect(...bounds, '#fff')).join('')}</clipPath></defs><g clip-path="url(#rain-outside-shelter)"><g class="scene-rain-drops">${rain}</g></g>`;
+    rainLayer = svg(rain, 'scene-ambient');
   } else if (id === 'library') {
     background = indoor('#655861', '#44424f', '#998583');
     for (const x of [51, 130, 209]) for (const y of [51, 72]) background += shelf(x, y, 70, books(x + 5, y, 9));
@@ -186,7 +189,7 @@ export function renderRoom(id) {
     background += rect(103, 109, 10, 20, '#b9b192') + rect(106, 103, 4, 6, '#c2a679') + rect(107, 99, 2, 4, '#e0bd78');
     foreground = counter(207, 112, 127, '#7f675e') + rect(296, 99, 17, 8, '#8e9991') + rect(291, 96, 27, 4, '#b2b79d') + rect(301, 87, 5, 12, '#a5ab91');
   }
-  return { background: svg(background), foreground: svg(foreground, 'scene-front'), ambient: svg(ambient, 'scene-ambient'), positions: layout.positions };
+  return { background: svg(background), foreground: svg(foreground, 'scene-front'), ambient: svg(ambient, 'scene-ambient'), rainLayer, positions: layout.positions };
 }
 
 /** A background-only thumbnail without the player's positioning classes. */
@@ -671,8 +674,9 @@ export class ScenePlayer {
       this.steam.style.opacity = String(layout.steam.opacity);
     }
     if (this.ambient) {
-      this.ambient.style.opacity = reduced ? '0.35' : this.scene.id === 'rooftop' ? String(0.4 + Math.floor(t / 600) % 2 * 0.4) : '0.5';
-      if (this.rainDrops) this.rainDrops.setAttribute('transform', reduced ? '' : `translate(${-Math.floor(t / 80) % 5} ${Math.floor(t / 40) % 13})`);
+      const atmosphere = sampleAtmosphere(this.scene.id, t, { reduced });
+      this.ambient.style.opacity = String(atmosphere.opacity);
+      if (this.rainDrops) this.rainDrops.setAttribute('transform', `translate(${atmosphere.x} ${atmosphere.y})`);
     }
     this.el.progress.style.transform = `scaleX(${t / this.duration})`;
   }

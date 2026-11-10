@@ -345,7 +345,11 @@ export async function mountSceneMaker({ host, getLanguage, notify, cloudService,
     if (!previewCollapsed) { resumeAfterPreview = false; if (shouldResume && !reduced()) play(); }
   });
   listen($('seek'), 'input', () => { pause(); position = Number($('seek').value); draw(); });
-  listen($('canvas'), 'keydown', event => { if (event.code === 'Space') { event.preventDefault(); playing ? pause() : play(); } else if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); pause(); position = Math.max(0, Math.min(compiled.duration, position + (event.key === 'ArrowLeft' ? -1000 : 1000))); draw(); } });
+  listen($('canvas'), 'keydown', event => {
+    if (recording) return;
+    if (event.code === 'Space') { event.preventDefault(); playing ? pause() : play(); }
+    else if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); pause(); position = Math.max(0, Math.min(compiled.duration, position + (event.key === 'ArrowLeft' ? -1000 : 1000))); draw(); }
+  });
   listen($('beats'), 'click', safe(event => { const button = event.target.closest('[data-sm-beat]'); if (button) selectBeat(Number(button.dataset.smBeat)); }));
   listen($('beat-editor'), 'change', safe(event => {
     const field = event.target.dataset.smField, key = event.target.dataset.smOption;

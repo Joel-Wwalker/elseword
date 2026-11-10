@@ -133,7 +133,11 @@ export function sampleApartments(time, { incident = 'pan', reduced = false } = {
   } else if (incident === 'pipe') {
     brine.expression = 'worried';
     moss.expression = 'curious';
-    props.push(prop('leaking-pipe', 'apartment-drip', 390, Math.round(89 + elapsed % 900 / 900 * 35), frameAt(elapsed, 225, 4)));
+    const cycle = elapsed % 900;
+    // The visible drop runs from the outlet at y86 to the basin rim at y132.
+    // Its local y3..12 shape gives way to a fixed y16..19 splash on impact.
+    const y = cycle < 675 ? Math.round(103 + cycle / 675 * 37) : 133;
+    props.push(prop('leaking-pipe', 'apartment-drip', 390, y, frameAt(elapsed, 225, 4)));
   }
   return { actors, props };
 }
@@ -151,7 +155,8 @@ export function sampleNightMarket(time, { incident = 'snack', reduced = false } 
   if (incident === 'theft') {
     vesper.expression = 'surprised';
     shard.expression = 'curious';
-    props.push(prop('food-thief', 'market-critter', route(elapsed, 7000, 188, 266).x, 219, 2 + frameAt(elapsed, 220, 2)));
+    const { x, direction } = route(elapsed, 7000, 188, 266);
+    props.push({ ...prop('food-thief', 'market-critter', x, 219, 2 + frameAt(elapsed, 220, 2)), direction });
   } else {
     kiln.expression = 'pleased';
     moss.expression = 'curious';

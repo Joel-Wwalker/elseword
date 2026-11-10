@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { createLanguage, composeSentence } from '../src/engine.js';
 import { validateRulesEdit } from '../src/studio-usability.js';
 import { getWorldPreset } from '../src/world-presets.js';
+import { createViewNavigation } from '../src/studio-navigation.js';
 
 const app = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
 // Run the actual app functions with only their browser boundaries replaced.
@@ -19,6 +20,29 @@ function node() {
     innerHTML: '', classList: { add() {}, remove() {}, toggle() {} },
     setAttribute() {}, removeAttribute() {}, focus() {}, querySelector: () => node() };
 }
+
+test('the skip link focuses the current workspace without changing its view or history', () => {
+  const location = { hash: '#words' }, routes = [], historyWrites = [];
+  const history = {
+    pushState(_state, _title, hash) { historyWrites.push(hash); location.hash = hash; },
+    replaceState(_state, _title, hash) { historyWrites.push(hash); location.hash = hash; },
+  };
+  const navigation = createViewNavigation({ history, location, render: view => routes.push(view) });
+  let click, focused = '';
+  const context = vm.createContext({
+    $: id => ({ focus() { focused = id; } }),
+    document: { addEventListener(_type, handler) { click = handler; } },
+  });
+  vm.runInContext(section("document.addEventListener('click',event=>{", "document.addEventListener('change',event=>{"), context);
+  const event = new Event('click', { cancelable: true });
+  Object.defineProperty(event, 'target', { value: { closest: selector => selector === '.skip-link' ? {} : null } });
+  click(event);
+  if (!event.defaultPrevented) { location.hash = '#main'; navigation.restore(); }
+  assert.equal(location.hash, '#words');
+  assert.equal(focused, 'main');
+  assert.deepEqual(routes, []);
+  assert.deepEqual(historyWrites, []);
+});
 
 test('a correction after failed Apply survives another grammar change and tab rendering', () => {
   const nodes = new Map(), listeners = new Map();

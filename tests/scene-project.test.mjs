@@ -199,6 +199,23 @@ test('actions keep both actors in clear room anchors and props on safe supports 
   }
 });
 
+test('the native umbrella passes toward its partner from its initial position and stops before the cast', () => {
+  const project = blank('busstop');
+  project.beats = Array.from({ length: 4 }, (_, index) => literal(`pass-${index}`, 'Hello.', { action: 'pass' }));
+  const compiled = compile(project), initial = sample(compiled, 0);
+  assert.ok(initial.prop.bounds[0] >= initial.prop.slot[0] && initial.prop.bounds[2] <= initial.prop.slot[1], 'The resting umbrella must begin inside its pass slot');
+  const firstPass = sample(compiled, 385);
+  assert.ok(firstPass.prop.x > initial.prop.x, 'The first character passes the umbrella right toward their partner');
+  let previous = initial.prop.x;
+  for (let time = 0; time <= compiled.duration; time += 17) {
+    const frame = sample(compiled, time);
+    assert.ok(frame.prop.x >= previous, 'Repeated passes must never jump backward');
+    assert.ok(frame.prop.bounds[2] < frame.actors[0].x, 'The umbrella stays clear of the first character cell');
+    assert.equal(frame.prop.bounds[3], 175, 'The umbrella stays grounded');
+    previous = frame.prop.x;
+  }
+});
+
 const memory = initial => ({ values: new Map(Object.entries(initial ?? {})), getItem(key) { return this.values.get(key) ?? null; }, setItem(key, value) { this.values.set(key, value); } });
 test('local scenes round trip independently from languages and preserve corrupt originals before repairs', () => {
   const load = tool('loadSceneProjects'), save = tool('saveSceneProjects');

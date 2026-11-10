@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { resolveObjectURL } from 'node:buffer';
 import { createLanguage } from '../src/engine.js';
 import { createSceneProject, compileSceneProject, sampleSceneProject } from '../src/scene-project.js';
 import { createSceneRenderer } from '../src/scene-renderer.js';
@@ -110,8 +111,9 @@ function canvasContext() {
     const [g, h, i, j, k, l] = matrix;
     matrix = [g*a+i*b, h*a+j*b, g*c+i*d, h*c+j*d, g*e+i*f+k, h*e+j*f+l];
   };
-  const record = (type, args) => calls.push({ type, args, matrix: [...matrix], clipped });
+  const record = (type, args) => calls.push({ type, args, matrix: [...matrix], clipped, alpha: context.globalAlpha });
   const context = {
+    globalAlpha: 1,
     font: '12px monospace',
     save() { stack.push({ matrix: [...matrix], clipped, alpha: this.globalAlpha }); },
     restore() { const state = stack.pop(); matrix = state.matrix; clipped = state.clipped; this.globalAlpha = state.alpha; },
@@ -128,10 +130,20 @@ function canvasContext() {
   return { context, calls };
 }
 
+class SceneImage {
+  width = 1024; height = 512;
+  set src(value) {
+    this.source = value;
+    const blob = resolveObjectURL(value);
+    if (blob) void blob.text().then(markup => { this.markup = markup; this.onload(); });
+    else queueMicrotask(() => this.onload());
+  }
+}
+
 test('video renderer clips and moves every room layer together while restoring caption coordinates', async t => {
   const previousImage = globalThis.Image, previousDocument = globalThis.document;
   t.after(() => { globalThis.Image = previousImage; globalThis.document = previousDocument; });
-  globalThis.Image = class { width = 1024; height = 512; set src(value) { this.source = value; queueMicrotask(() => this.onload()); } };
+  globalThis.Image = SceneImage;
   globalThis.document = { baseURI: 'http://localhost/', fonts: { load: async () => {}, ready: Promise.resolve() } };
   const { context, calls } = canvasContext();
   const renderer = await createSceneRenderer({ getContext: () => context });
@@ -170,4 +182,31 @@ test('video renderer clips and moves every room layer together while restoring c
   for (const mark of marks) assert.ok(calls.indexOf(mark) > lastActor, 'Impact marks draw above the actors');
   for (const caption of calls.filter(call => call.type === 'text')) assert.equal(caption.clipped, false);
   renderer.destroy();
+});
+
+test('canvas rain moves beneath a fixed shelter mask and matches World atmosphere opacity', async t => {
+  const previousImage = globalThis.Image, previousDocument = globalThis.document;
+  t.after(() => { globalThis.Image = previousImage; globalThis.document = previousDocument; });
+  globalThis.Image = SceneImage;
+  globalThis.document = { baseURI: 'http://localhost/', fonts: { load: async () => {}, ready: Promise.resolve() } };
+  const { context, calls } = canvasContext();
+  const renderer = await createSceneRenderer({ getContext: () => context });
+  t.after(() => renderer.destroy());
+  const rainy = scene('busstop', ['none']), rooftop = scene('rooftop', ['none']);
+  for (const [time, reduced, position, opacity] of [[1000, false, [-2, 12], 0.5], [1080, false, [-3, 1], 0.5], [1080, true, [0, 0], 0.35]]) {
+    calls.length = 0;
+    renderer.draw(rainy, time, { reduced });
+    const rain = calls.filter(call => call.type === 'image').at(-1);
+    assert.doesNotMatch(rain.args[0].markup, /clipPath|clip-path/u, 'The moving rain image must not carry the stationary shelter mask');
+    assert.deepEqual(rain.args.slice(1), [...position, 384, 216], 'Rain translates independently of the room');
+    assert.equal(rain.alpha, opacity);
+    assert.deepEqual(calls.filter(call => call.type === 'clipRect').slice(-4).map(call => call.args),
+      [[27, 23, 330, 47], [27, 70, 58, 114], [296, 70, 61, 114], [27, 169, 330, 15]], 'The shelter mask stays fixed as rain moves');
+    assert.ok(calls.filter(call => call.type === 'text').every(call => call.alpha === 1), 'Atmosphere opacity must not dim captions');
+  }
+  for (const [time, reduced, opacity] of [[1000, false, 0.8], [1200, false, 0.4], [1200, true, 0.35]]) {
+    calls.length = 0;
+    renderer.draw(rooftop, time, { reduced });
+    assert.equal(calls.filter(call => call.type === 'image').at(-1).alpha, opacity, 'Rooftop stars keep their sampled twinkle');
+  }
 });

@@ -189,3 +189,18 @@ test('World facial cues follow dialogue and contacts without sticking after a re
   assert.equal(player.sprites[0].dataset.expression, first.expressions[0]);
   assert.notEqual(player.sprites[0].dataset.expression, 'startled');
 });
+
+test('World rain and rooftop stars retain the same sampled atmosphere during seeks and reduced motion', () => {
+  const player = playerFixture();
+  player.setScene('busstop');
+  for (const [time, reduced, transform, opacity] of [[1000, false, 'translate(-2 12)', '0.5'], [1080, false, 'translate(-3 1)', '0.5'], [1080, true, 'translate(0 0)', '0.35']]) {
+    player.elapsed = time; player.motion.matches = reduced; player.render();
+    assert.equal(player.rainDrops.attributes.transform, transform);
+    assert.equal(player.ambient.style.opacity, opacity);
+  }
+  player.setScene('rooftop');
+  for (const [time, reduced, opacity] of [[1000, false, '0.8'], [1200, false, '0.4'], [1200, true, '0.35']]) {
+    player.elapsed = time; player.motion.matches = reduced; player.render();
+    assert.equal(player.ambient.style.opacity, opacity);
+  }
+});
