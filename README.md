@@ -35,6 +35,8 @@ Word generation is deterministic from the chosen sounds and seed. The sentence b
 
 Video export uses browser Canvas capture and MediaRecorder. It records at normal playback speed in an active, visible tab, using MP4 when supported or WebM otherwise.
 
+Residents occasionally shift their posture between lines and actions; reduced motion disables these idles. The bakery, bus stop and rooftop have quiet synthesized room ambience. It follows the existing sound controls, stops when playback pauses or the preview is hidden, and is included in videos with scene sound enabled.
+
 ## Saving your work
 
 Language edits save automatically on this device. The scene editor also recovers its current draft and offers named local saves. Browser storage belongs to the current browser and site address, so download JSON backups before clearing site data or moving to a different installation.

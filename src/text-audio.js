@@ -1,4 +1,5 @@
 import { makeEffectSamples } from './scene-sounds.js';
+import { makeAmbienceSamples, AMBIENCE_SAMPLE_RATE, AMBIENCE_SECONDS } from './scene-ambience.js';
 
 const PREFERENCE_KEY = 'little-languages:text-sounds';
 const BLIP_INTERVAL = 40;
@@ -69,6 +70,8 @@ export class TextAudio {
     this._sources = new Set();
     this._effects = new Set();
     this._effectBuffers = new Map();
+    this._ambienceBuffers = new Map();
+    this._ambience = null;
     this._listeners = [];
     this._context = null;
     this._resumePromise = null;
@@ -208,6 +211,46 @@ export class TextAudio {
     }
   }
 
+  setAmbience(room, time = 0) {
+    if (this._destroyed || !this.enabled || !this.ready || this._hidden()) return false;
+    if (this._ambience?.room === room) return true;
+    this._stopAmbience();
+    let source, gain;
+    try {
+      let buffer = this._ambienceBuffers.get(room);
+      if (!buffer) {
+        const samples = makeAmbienceSamples(room);
+        if (!samples.length) return false;
+        buffer = this._context.createBuffer(1, samples.length, AMBIENCE_SAMPLE_RATE);
+        buffer.getChannelData(0).set(samples);
+        this._ambienceBuffers.set(room, buffer);
+      }
+      source = this._context.createBufferSource();
+      gain = this._context.createGain();
+      source.buffer = buffer; source.loop = true;
+      source.connect(gain); gain.connect(this._context.destination);
+      const now = this._context.currentTime;
+      gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(1, now + 0.04);
+      source.start(now, Number.isFinite(time) ? Math.max(0, time / 1000) % AMBIENCE_SECONDS : 0);
+      this._ambience = { room, source, gain };
+      return true;
+    } catch {
+      try { source?.stop(); } catch { /* Partial startup. */ }
+      try { source?.disconnect(); } catch { /* Partial startup. */ }
+      try { gain?.disconnect(); } catch { /* Partial startup. */ }
+      return false;
+    }
+  }
+
+  _stopAmbience() {
+    if (!this._ambience) return;
+    const { source, gain } = this._ambience;
+    this._ambience = null;
+    try { source.stop(); } catch { /* Already stopped. */ }
+    try { source.disconnect(); } catch { /* Already disconnected. */ }
+    try { gain.disconnect(); } catch { /* Already disconnected. */ }
+  }
+
   _playCharacter(character, voiceId, remaining = Infinity) {
     if (this._destroyed || !this.enabled || !this.ready || this._hidden() || !isAudibleCharacter(character)) return false;
     const now = this._now();
@@ -300,6 +343,7 @@ export class TextAudio {
 
   stop() {
     this._stopSpeech();
+    this._stopAmbience();
     for (const source of this._effects) {
       source.onended = null;
       try { source.stop(); } catch { /* A source may have just ended. */ }
@@ -313,6 +357,7 @@ export class TextAudio {
     this._destroyed = true;
     this.stop();
     this._effectBuffers.clear();
+    this._ambienceBuffers.clear();
     for (const remove of this._listeners) remove();
     this._listeners.length = 0;
     this.ready = false;

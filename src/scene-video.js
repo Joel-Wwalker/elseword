@@ -1,6 +1,7 @@
 import { compileSceneProject, validateSceneProject, assertScenePlayable } from './scene-project.js';
 import { makeBlipSamples } from './text-audio.js';
 import { makeEffectSamples } from './scene-sounds.js';
+import { makeAmbienceSamples, AMBIENCE_SAMPLE_RATE } from './scene-ambience.js';
 
 export function selectRecordingFormat(Recorder) {
   if (typeof Recorder?.isTypeSupported !== 'function') throw new Error('This browser does not support video recording. You can still save an editable scene.');
@@ -30,7 +31,7 @@ export function createVideoExporter(environment = globalThis, { createRenderer: 
     const later=environment.setTimeout.bind(environment), clearLater=environment.clearTimeout.bind(environment);
     const now=environment.now || (()=>environment.performance.now());
     let capture,context,destination,recorder,frame,timer,ownedRenderer=false,removeListeners=()=>{};
-    const sources=[];
+    const sources=[],gains=[];
     // Startup may wait for assets or audio permission indefinitely. Cancellation
     // owns those waits as well as recording, so capture can always be released.
     let cancellationError, rejectCancellation;
@@ -69,6 +70,14 @@ export function createVideoExporter(environment = globalThis, { createRenderer: 
         destination=context.createMediaStreamDestination();
         for (const track of destination.stream.getAudioTracks()) capture.addTrack(track);
         const buffers=new Map();
+        const ambience=makeAmbienceSamples(project.room);
+        if(ambience.length){
+          const buffer=context.createBuffer(1,ambience.length,AMBIENCE_SAMPLE_RATE);buffer.getChannelData(0).set(ambience);
+          const source=context.createBufferSource();sources.push(source);
+          const gain=context.createGain();gains.push(gain);
+          source.buffer=buffer;source.loop=true;source.connect(gain);gain.connect(destination);
+          prepared.push({source,time:0,gain});
+        }
         for (const event of compiled.audioEvents) {
           const key=event.effect ? `effect:${event.effect}` : `voice:${event.voice}:${event.character}`;
           let buffer=buffers.get(key);
@@ -93,7 +102,15 @@ export function createVideoExporter(environment = globalThis, { createRenderer: 
         try {
           recorder.start(1000);
           const start=now(),audioStart=context?context.currentTime+0.06:0;
-          for(const {source,time} of prepared)source.start(audioStart+time/1000);
+          for(const {source,time,gain} of prepared){
+            if(gain){
+              const end=audioStart+compiled.duration/1000,fade=Math.min(0.04,compiled.duration/2000);
+              gain.gain.setValueAtTime(0,audioStart);gain.gain.linearRampToValueAtTime(1,audioStart+fade);
+              gain.gain.setValueAtTime(1,end-fade);gain.gain.linearRampToValueAtTime(0,end);
+            }
+            source.start(audioStart+time/1000);
+            if(gain)source.stop(audioStart+compiled.duration/1000);
+          }
           const tick=()=>{
             if(settled)return;
             try {
@@ -116,6 +133,7 @@ export function createVideoExporter(environment = globalThis, { createRenderer: 
       removeListeners();if(frame!==undefined)cancelFrame(frame);if(timer!==undefined)clearLater(timer);
       if(recorder?.state==='recording'||recorder?.state==='paused')try{recorder.stop();}catch{/* Already stopped. */}
       for(const source of sources){try{source.stop();}catch{/* Not started or ended. */}try{source.disconnect();}catch{/* Already disconnected. */}}
+      for(const gain of gains)try{gain.disconnect();}catch{/* Already disconnected. */}
       for(const track of capture?.getTracks?.() || [])try{track.stop();}catch{/* Best effort on partial startup. */}
       for(const track of destination?.stream?.getTracks?.() || [])try{track.stop();}catch{/* Best effort. */}
       try{destination?.disconnect();}catch{/* Already disconnected. */}

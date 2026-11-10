@@ -4,6 +4,7 @@ import { createLanguage } from '../src/engine.js';
 import { createSceneProject } from '../src/scene-project.js';
 import { createVideoExporter, selectRecordingFormat } from '../src/scene-video.js';
 import { makeEffectSamples } from '../src/scene-sounds.js';
+import { makeAmbienceSamples } from '../src/scene-ambience.js';
 
 const scene = () => {
   const project = createSceneProject(createLanguage({name:'Video test'}));
@@ -35,6 +36,7 @@ function harness({fail=false, resumeGate, connectFails=false}={}) {
     get currentTime(){return now/1000;}
     async resume(){if(resumeGate)await resumeGate.promise;this.state='running';}
     async close(){this.closed=true;this.state='closed';this.dispatchEvent(new Event('statechange'));}
+    createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(){}},connect(){},disconnect(){}};}
     createMediaStreamDestination(){
       const track={stopped:false,stop(){this.stopped=true;}};
       const node={disconnected:false,stream:{getAudioTracks:()=>[track],getTracks:()=>[track]},disconnect(){this.disconnected=true;}};
@@ -62,6 +64,20 @@ test('recording chooses only supported formats and never disguises WebM as MP4',
   assert.equal(selectRecordingFormat({isTypeSupported:t=>t==='video/webm;codecs=vp8,opus'}).extension,'webm');
   assert.equal(selectRecordingFormat({isTypeSupported:t=>t==='video/mp4'}).extension,'mp4');
   assert.throws(()=>selectRecordingFormat({isTypeSupported:()=>false}),/support/i);
+});
+
+test('video includes the same room loop only when scene sounds are enabled',async()=>{
+  for (const sound of [true,false]) {
+    const h=harness(),project=scene();project.sound=sound;
+    await createVideoExporter(h.env)(project,{canvas:h.canvas,renderer:h.renderer});
+    const loops=h.sources.filter(source=>source.loop);
+    assert.equal(loops.length,Number(sound));
+    if(sound){
+      assert.deepEqual(loops[0].buffer.getChannelData(0),makeAmbienceSamples('bakery'));
+      assert.equal(loops[0].startTime,0.06);
+      assert.ok(loops[0].stopped && loops[0].disconnected);
+    }
+  }
 });
 
 test('video schedules original contact samples on the same clock as the visible landing',async()=>{

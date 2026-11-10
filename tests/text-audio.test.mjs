@@ -45,6 +45,9 @@ function fixture({ storage = new Map(), suspended = false, resume, contextFails 
       });
     }
     async close() { this.state = 'closed'; }
+    createGain() {
+      return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {} }, connect() {}, disconnect() { this.disconnected = true; } };
+    }
     createBuffer(channels, length, sampleRate) {
       const samples = new Float32Array(length);
       return { duration: length / sampleRate, getChannelData: () => samples };
@@ -54,7 +57,7 @@ function fixture({ storage = new Map(), suspended = false, resume, contextFails 
         buffer: null, onended: null, stopped: false, disconnected: false,
         connect() {},
         disconnect() { this.disconnected = true; },
-        start() { outputs.push({ source: this, at: time }); },
+        start(_when, offset) { this.offset = offset; outputs.push({ source: this, at: time }); },
         stop() { this.stopped = true; },
       };
       return source;
@@ -80,6 +83,31 @@ function fixture({ storage = new Map(), suspended = false, resume, contextFails 
   }
   return { audio, contexts, outputs, document, window, timers, storage, advance };
 }
+
+test('ambience owns one loop, survives speech, and stops with playback or visibility', async () => {
+  const f = fixture();
+  assert.equal(f.audio.setAmbience('bakery'), false);
+  assert.equal(f.contexts.length, 0, 'Ambient playback cannot unlock audio');
+  await f.audio.unlock();
+  assert.equal(f.audio.setAmbience('bakery', 9500), true);
+  const oven = f.outputs.at(-1).source;
+  assert.equal(oven.loop, true); assert.equal(oven.offset, 1.5);
+  for (let i = 0; i < 100; i++) f.audio.setAmbience('bakery', 9500 + i);
+  assert.equal(f.outputs.length, 1, 'Frames do not layer loops');
+  f.audio.playText('hello'); assert.equal(oven.stopped, false);
+  f.audio.setAmbience('busstop'); assert.ok(oven.stopped && oven.disconnected);
+  const rain = f.outputs.at(-1).source;
+  f.audio.setAmbience('library'); assert.ok(rain.stopped && rain.disconnected);
+  for (const stop of [() => f.audio.stop(), () => f.audio.setEnabled(false), () => {
+    f.document.hidden = true; f.document.dispatch('visibilitychange');
+  }, () => { f.contexts[0].state = 'suspended'; f.contexts[0].dispatch('statechange'); }, () => f.audio.destroy()]) {
+    f.audio.setAmbience('rooftop'); const source = f.outputs.at(-1).source;
+    stop(); assert.ok(source.stopped && source.disconnected);
+    assert.equal(f.audio._ambience, null);
+    f.document.hidden = false; f.audio.setEnabled(true); await f.audio.unlock();
+  }
+  assert.equal(f.audio._ambienceBuffers.size, 0);
+});
 
 test('original voice samples are quiet, finite, short and smoothly enveloped', () => {
   assert.equal(typeof makeBlipSamples, 'function', 'Original PCM synthesizer must exist');
