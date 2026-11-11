@@ -21,6 +21,7 @@ const DEFAULT_SCRIPT = Object.freeze({ style: 'latin', direction: 'ltr', glyphs:
 const VALID_PATTERNS = new Set(['CV', 'CVC', 'V', 'VC', 'CCV']);
 const BAD_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const MAX_JSON = 1_000_000;
+const utf8 = new TextEncoder();
 const MAX_WORDS = 2000;
 const COMMON_PLURALS = Object.freeze({ books: 'book', tickets: 'ticket', coins: 'coin', stars: 'star', children: 'child', people: 'person', leaves: 'leaf' });
 const COMMON_ALIASES = Object.freeze({ is: 'be', are: 'be', am: 'be', has: 'have', needs: 'need', coming: 'come', said: 'say', stops: 'stop', does: 'do', asked: 'ask' });
@@ -181,12 +182,12 @@ function ensureSafeTree(value, depth = 0, budget = { nodes: 0 }, seen = new Weak
 /** Returns a normalized, detached version-2 backup. Version-1 spellings are preserved. */
 export function validateLanguage(value) {
   if (typeof value === 'string') {
-    if (value.length > MAX_JSON) throw new Error('Import is too large (maximum 1 MB).');
+    if (value.length > MAX_JSON || utf8.encode(value).byteLength > MAX_JSON) throw new Error('Import is too large (maximum 1 MB).');
     try { value = JSON.parse(value); } catch { throw new Error('Import is not valid JSON.'); }
   }
   ensureSafeTree(value);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Import must contain a language object.');
-  if (JSON.stringify(value).length > MAX_JSON) throw new Error('Import is too large (maximum 1 MB).');
+  if (utf8.encode(JSON.stringify(value)).byteLength > MAX_JSON) throw new Error('Import is too large (maximum 1 MB).');
   if (![1, 2].includes(value.version)) throw new Error('Unsupported language version; expected version 1 or 2.');
   if (value.generationVersion !== undefined && value.generationVersion !== 2) throw new Error('Unsupported generation version; expected 2 or no generation version.');
   if (!Array.isArray(value.words) || value.words.length > MAX_WORDS) throw new Error(`Words must be an array of at most ${MAX_WORDS} entries.`);

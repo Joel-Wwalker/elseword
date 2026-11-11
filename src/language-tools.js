@@ -47,7 +47,7 @@ export function parseDictionaryCSV(text, language) {
   const preview = { rows: [], errors: [], duplicates: [] };
   let base, records;
   try {
-    if (typeof text !== 'string' || text.length > 1_000_000) throw new Error('CSV must be text no larger than 1 MB.');
+    if (typeof text !== 'string' || text.length > 1_000_000 || new TextEncoder().encode(text).byteLength > 1_000_000) throw new Error('CSV must be text no larger than 1 MB.');
     base = validateLanguage(language);
     records = csvRecords(text.replace(/^\uFEFF/u, ''));
     if (!records.length) throw new Error('CSV needs a header and dictionary rows.');
